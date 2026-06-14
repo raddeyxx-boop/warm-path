@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "n8n": "node scripts/n8n-server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

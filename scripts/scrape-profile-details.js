@@ -1,116 +1,215 @@
 const startBrowser = require('../services/browser');
 
 async function scrapeProfile(profileUrl) {
-
     const { browser, page } = await startBrowser();
 
     try {
-
+        console.log('\n=================================');
         console.log('Opening profile...');
         console.log(profileUrl);
+        console.log('=================================\n');
 
         await page.goto(profileUrl, {
-            waitUntil: 'domcontentloaded'
+            waitUntil: 'networkidle',
+            timeout: 60000
         });
 
         await page.waitForTimeout(5000);
 
-        const pageText = await page.locator('main').textContent();
-
         const profile = {
-            url: profileUrl,
+            linkedin_url: profileUrl,
             name: '',
-            pronouns: '',
             headline: '',
-            companyEducation: '',
+            company: '',
             location: '',
+            about: '',
             status: 'unknown'
         };
 
-        // Name
-        const nameMatch = pageText.match(
-            /^([A-Z][A-Za-zÀ-ÿ\s.'-]+?)(He\/Him|She\/Her|They\/Them|Founder|CEO|Director)/i
-        );
+        const pageText =
+            (await page.locator('main').textContent()) || '';
 
-        if (nameMatch) {
-            profile.name = nameMatch[1].trim();
+        const lines = pageText
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean);
+
+        console.log('\nFIRST 30 LINES');
+        console.log('====================');
+        console.log(lines.slice(0, 30));
+
+        // =====================================
+        // NAME
+        // =====================================
+        try {
+            const h1 = await page.locator('h1').first().textContent();
+
+            if (h1) {
+                profile.name = h1.trim();
+            }
+        } catch {}
+
+        if (!profile.name && lines.length > 0) {
+            profile.name = lines[0];
         }
 
-        // Pronouns
-        const pronounMatch = pageText.match(
-            /(He\/Him|She\/Her|They\/Them)/i
-        );
+        // =====================================
+        // HEADLINE
+        // =====================================
+        try {
+            const headlineSelectors = [
+                '.text-body-medium',
+                '.pv-text-details__left-panel div.text-body-medium',
+            ];
 
-        if (pronounMatch) {
-            profile.pronouns = pronounMatch[1];
-        }
+            for (const selector of headlineSelectors) {
+                const locator = page.locator(selector);
 
-        // Location
-        const locationMatch = pageText.match(
-            /([A-Za-zÀ-ÿ\s]+,\s*[A-Za-zÀ-ÿ\s]+,\s*Sweden)/
-        );
+                if (await locator.count()) {
+                    const text = (
+                        await locator.first().textContent()
+                    )?.trim();
 
-        if (locationMatch) {
-            profile.location = locationMatch[1].trim();
-        }
-
-        // Headline
-        const headlineMatch = pageText.match(
-            /(Founder\s*&\s*CEO.*?)(Indpro\s*·)/i
-        );
-
-        if (headlineMatch) {
-            profile.headline = headlineMatch[1].trim();
-        }
-
-        // Company + Education
-        const companyMatch = pageText.match(
-            /(Indpro\s*·\s*Uppsala University)/i
-        );
-
-        if (companyMatch) {
-            profile.companyEducation = companyMatch[1].trim();
-        }
-
-        // Relationship Status
-        const connectLink = page
-            .locator('a[href*="/preload/custom-invite/"]')
-            .filter({ hasText: 'Connect' });
-
-        if (await connectLink.count() > 0) {
-
-            profile.status = 'connect_available';
-
-        } else {
-
-            const followBtn = page.locator('text=Follow');
-
-            if (await followBtn.count() > 0) {
-
-                profile.status = 'follow_only';
-
-            } else {
-
-                const messageBtn = page.locator('text=Message');
-
-                if (await messageBtn.count() > 0) {
-
-                    profile.status =
-                        'connected_or_message_available';
+                    if (text) {
+                        profile.headline = text;
+                        break;
+                    }
                 }
             }
+        } catch {}
+
+        if (!profile.headline) {
+            const idx = lines.findIndex(
+                line =>
+                    profile.name &&
+                    line.includes(profile.name)
+            );
+
+            if (idx >= 0 && lines[idx + 1]) {
+                profile.headline = lines[idx + 1];
+            }
         }
+
+        // =====================================
+        // LOCATION
+        // =====================================
+        try {
+            const locationPatterns = [
+                /[A-Za-z\s]+,\s*[A-Za-z\s]+,\s*[A-Za-z\s]+/,
+                /Greater\s+[A-Za-z\s]+\s+Area/,
+                /[A-Za-z\s]+,\s*India/,
+                /[A-Za-z\s]+,\s*Sweden/,
+                /[A-Za-z\s]+,\s*USA/
+            ];
+
+            for (const line of lines) {
+                for (const pattern of locationPatterns) {
+                    if (pattern.test(line)) {
+                        profile.location = line;
+                        break;
+                    }
+                }
+
+                if (profile.location) break;
+            }
+        } catch {}
+
+        // =====================================
+        // COMPANY
+        // =====================================
+        try {
+            if (profile.headline) {
+                const atMatch = profile.headline.match(
+                    /\bat\s+(.+)$/i
+                );
+
+                if (atMatch) {
+                    profile.company = atMatch[1].trim();
+                }
+            }
+
+            if (!profile.company) {
+                const experienceIndex = lines.findIndex(
+                    line =>
+                        line.toLowerCase() === 'experience'
+                );
+
+                if (
+                    experienceIndex >= 0 &&
+                    lines[experienceIndex + 2]
+                ) {
+                    profile.company =
+                        lines[experienceIndex + 2];
+                }
+            }
+        } catch {}
+
+        // =====================================
+        // ABOUT
+        // =====================================
+        try {
+            const aboutIndex = lines.findIndex(
+                line =>
+                    line.toLowerCase() === 'about'
+            );
+
+            if (
+                aboutIndex >= 0 &&
+                lines[aboutIndex + 1]
+            ) {
+                profile.about = lines
+                    .slice(
+                        aboutIndex + 1,
+                        aboutIndex + 6
+                    )
+                    .join(' ');
+            }
+        } catch {}
+
+        // =====================================
+        // CONNECTION STATUS
+        // =====================================
+        try {
+            if (
+                await page
+                    .getByRole('button', {
+                        name: /connect/i
+                    })
+                    .count()
+            ) {
+                profile.status =
+                    'connect_available';
+            } else if (
+                await page
+                    .getByRole('button', {
+                        name: /message/i
+                    })
+                    .count()
+            ) {
+                profile.status =
+                    'connected_or_message_available';
+            } else if (
+                await page
+                    .getByRole('button', {
+                        name: /follow/i
+                    })
+                    .count()
+            ) {
+                profile.status = 'follow_only';
+            }
+        } catch {}
 
         console.log('\nPROFILE DATA');
         console.log('====================');
         console.log(JSON.stringify(profile, null, 2));
 
+        return profile;
+
     } catch (err) {
-
+        console.error('\nSCRAPE ERROR');
         console.error(err);
-
+        return null;
     } finally {
-
         await browser.close();
     }
 }

@@ -6,6 +6,8 @@ function scoreProfile(profile) {
     let score = 0;
 
     const text = (
+        profile.name +
+        ' ' +
         profile.headline +
         ' ' +
         profile.company +
@@ -29,7 +31,9 @@ function scoreProfile(profile) {
     if (
         text.includes('sales') ||
         text.includes('marketing') ||
-        text.includes('business development')
+        text.includes('business development') ||
+        text.includes('recruiter') ||
+        text.includes('talent acquisition')
     ) score += 10;
 
     if (
@@ -40,34 +44,338 @@ function scoreProfile(profile) {
     return score;
 }
 
+async function gotoProfile(page, url) {
+
+    let currentPage = page;
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+
+        try {
+
+            await currentPage.goto(url, {
+                waitUntil: 'domcontentloaded',
+                timeout: 90000
+            });
+
+            return currentPage;
+
+        } catch (err) {
+
+            lastError = err;
+
+            console.log(
+                `Navigation attempt ${attempt} failed: ${err.message.split('\n')[0]}`
+            );
+
+            if (attempt < 3) {
+                await currentPage.waitForTimeout(2000)
+                    .catch(() => {});
+
+                if (
+                    err.message.includes('ERR_ABORTED') ||
+                    err.message.includes('frame was detached') ||
+                    currentPage.isClosed()
+                ) {
+                    currentPage = await currentPage.context().newPage();
+                }
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 async function scrapeProfile(page, url) {
 
     try {
 
-        await page.goto(url, {
-            waitUntil: 'domcontentloaded'
-        });
+        page = await gotoProfile(page, url);
+
+        await page.waitForLoadState('networkidle')
+            .catch(() => {});
 
         await page.waitForTimeout(4000);
 
-        const text = await page
-            .locator('main')
-            .textContent();
+        const profile = await page.evaluate(() => {
 
-        const lines = text
-            .split('\n')
-            .map(x => x.trim())
-            .filter(Boolean);
+            const clean = text =>
+                (text || '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+            const getText = selector =>
+                clean(document.querySelector(selector)?.innerText);
+
+            const isVisible = el => {
+                const style = window.getComputedStyle(el);
+
+                return (
+                    style &&
+                    style.visibility !== 'hidden' &&
+                    style.display !== 'none' &&
+                    el.getClientRects().length > 0
+                );
+            };
+
+            const badTexts = new Set([
+                'Try Premium for Rs.0',
+                'Try Premium for 0',
+                'Message',
+                'Connect',
+                'Follow',
+                'More',
+                'Show all',
+                'Notifications',
+                'Jobs',
+                'Home',
+                'My Network',
+                'For Business',
+                'Contact info'
+            ]);
+
+            const roleRegex =
+                /\b(at|founder|co-founder|ceo|cto|cfo|coo|director|manager|engineer|recruiter|specialist|president|lead|officer|consultant|advisor|head|partner|owner)\b/i;
+
+            const locationRegex =
+                /^(?:(Bengaluru|Bangalore|Mumbai|Delhi|Hyderabad|Pune|Chennai|Gurugram|Gurgaon|Noida|Ahmedabad|Kolkata),\s*[A-Z][A-Za-z .'-]+,\s*(India|Sweden|United States|USA|UK|Singapore)|(Bengaluru|Bangalore|Mumbai|Delhi|Hyderabad|Pune|Chennai|Gurugram|Gurgaon|Noida|Ahmedabad|Kolkata),?\s*(India)?)$/i;
+
+            const companySeparators = [
+                'Connect',
+                'Message',
+                'Follow',
+                'Contact info'
+            ];
+
+            const visibleTexts = [
+                ...document.querySelectorAll(
+                    'main h1, main span, main div.text-body-medium, main div.text-body-small'
+                )
+            ]
+                .filter(isVisible)
+                .map(el => clean(el.innerText))
+                .filter(Boolean)
+                .filter(text => !badTexts.has(text));
+
+            const uniqueTexts = [];
+
+            for (const text of visibleTexts) {
+                if (!uniqueTexts.includes(text)) {
+                    uniqueTexts.push(text);
+                }
+            }
+
+            const mainText =
+                clean(document.querySelector('main')?.innerText);
+
+            let name =
+                getText('main h1') ||
+                getText('h1');
+
+            let headline = '';
+            let company = '';
+            let location = '';
+
+            for (let i = 0; i < uniqueTexts.length; i++) {
+                const current = uniqueTexts[i];
+                const next = uniqueTexts[i + 1] || '';
+
+                if (!name && current.length > 3 && current.length < 80 && roleRegex.test(next)) {
+                    name = current;
+                    headline = next;
+                    break;
+                }
+
+                if (name && current === name && roleRegex.test(next)) {
+                    headline = next;
+                    break;
+                }
+            }
+
+            if (!headline) {
+                headline =
+                    uniqueTexts.find(text => roleRegex.test(text) && text !== name) || '';
+            }
+
+            location =
+                uniqueTexts.find(text => locationRegex.test(text)) || '';
+
+            if (!location && mainText) {
+                const locationMatch = mainText.match(
+                    /([A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+,\s*(?:India|Sweden|United States|USA|UK|Singapore))/
+                );
+
+                location = clean(locationMatch?.[1]);
+            }
+
+            if (location) {
+                const locationIndex = uniqueTexts.indexOf(location);
+
+                if (locationIndex > 0) {
+                    company = uniqueTexts[locationIndex - 1];
+                }
+            }
+
+            if (!company && headline && mainText) {
+                const afterHeadline =
+                    mainText.split(headline)[1] || '';
+
+                const beforeLocation = location
+                    ? afterHeadline.split(location)[0]
+                    : afterHeadline;
+
+                company = clean(
+                    companySeparators.reduce(
+                        (text, separator) => text.split(separator)[0],
+                        beforeLocation
+                    )
+                );
+            }
+
+            if (company === headline || badTexts.has(company)) {
+                company = '';
+            }
+
+            if (
+                /^[•·]|\b(1st|2nd|3rd|Messaging|Visit my website|Show details|\d+\s*(mo|yr|d|h)\s*•|Institute|University|College|School)\b/i
+                    .test(name)
+            ) {
+                name = '';
+            }
+
+            if (location && (!locationRegex.test(location) || location.length > 90)) {
+                location = '';
+            }
+
+            if (company && locationRegex.test(company.replace(/[·\s]+$/g, ''))) {
+                company = '';
+            }
+
+            if ((!name || !headline || !location) && mainText) {
+                const headerEndMatch =
+                    mainText.match(/\b(Activity|Posts|Experience|About)\b/i);
+
+                let headerText = clean(
+                    headerEndMatch
+                        ? mainText.slice(0, headerEndMatch.index)
+                        : mainText
+                );
+
+                headerText = clean(
+                    headerText.replace(
+                        /^(Messaging|Skip to main content|Search|Home|My Network|Jobs|Notifications)+/i,
+                        ''
+                    )
+                );
+
+                const fallbackLocationMatch = headerText.match(
+                    /((?:Bengaluru|Bangalore|Mumbai|Delhi|Hyderabad|Pune|Chennai|Gurugram|Gurgaon|Noida|Ahmedabad|Kolkata),\s*[A-Z][A-Za-z .'-]+,\s*(?:India|Sweden|United States|USA|UK|Singapore))/i
+                );
+
+                const fallbackLocation =
+                    clean(fallbackLocationMatch?.[1]);
+
+                if (!location && fallbackLocation) {
+                    location = fallbackLocation;
+                }
+
+                const afterLocation = clean(
+                    fallbackLocation
+                        ? headerText.split(fallbackLocation)[1] || ''
+                        : ''
+                );
+
+                const beforeLocation = clean(
+                    fallbackLocation
+                        ? headerText.split(fallbackLocation)[0]
+                        : headerText.split('Contact info')[0]
+                );
+
+                const titleStartMatch = beforeLocation.match(
+                    /\b(Chief|Founder|Co-Founder|CEO|CTO|CFO|COO|Director|Manager|Engineer|Recruiter|Specialist|President|Lead|Officer|Consultant|Advisor|Head|Partner|Owner|Vice President|VP)\b/i
+                );
+
+                if (titleStartMatch) {
+                    const fallbackName =
+                        clean(beforeLocation.slice(0, titleStartMatch.index));
+
+                    const roleAndCompany =
+                        clean(beforeLocation.slice(titleStartMatch.index));
+
+                    if (!name && fallbackName) {
+                        name = fallbackName;
+                    }
+
+                    if (!company && headline && roleAndCompany.startsWith(headline)) {
+                        company = clean(
+                            roleAndCompany.slice(headline.length)
+                        );
+                    }
+
+                    if (!headline || !company) {
+                        const repeatedCompanyMatch = roleAndCompany.match(
+                            /^(.+?\bat\s+(.+?))\s*\2(?=\s|·|[A-Z]|$)/i
+                        );
+
+                        if (repeatedCompanyMatch) {
+                            if (!headline) {
+                                headline = clean(repeatedCompanyMatch[1]);
+                            }
+
+                            if (!company) {
+                                company = clean(
+                                    roleAndCompany.slice(
+                                        repeatedCompanyMatch[1].length
+                                    )
+                                );
+                            }
+                        } else if (!headline) {
+                            headline = roleAndCompany;
+                        }
+                    }
+                }
+
+                if (!company && afterLocation) {
+                    let afterLocationCompany =
+                        afterLocation
+                            .replace(/^[·\s]+/g, '')
+                            .replace(/^Contact info\s*/i, '');
+
+                    for (const separator of companySeparators) {
+                        afterLocationCompany =
+                            afterLocationCompany.split(separator)[0];
+                    }
+
+                    company = clean(afterLocationCompany);
+                }
+            }
+
+            name = clean(
+                name
+                    .replace(/\b(She\/Her|He\/Him|They\/Them)\b/ig, '')
+                    .replace(/\b(Talent Acquisition|HR Business|Human Resources)\b.*$/i, '')
+            );
+
+            return {
+                name: clean(name),
+                headline: clean(headline),
+                company: clean(company),
+                location: locationRegex.test(clean(location)) ? clean(location) : ''
+            };
+        });
 
         return {
             url,
-            name: lines[0] || '',
-            headline: lines[2] || '',
-            company: lines[3] || '',
-            location: lines[4] || ''
+            name: profile.name || '',
+            headline: profile.headline || '',
+            company: profile.company || '',
+            location: profile.location || ''
         };
 
-    } catch {
+    } catch (err) {
+
+        console.log('Failed:', url);
+        console.log(err.message);
 
         return {
             url,
@@ -81,12 +389,19 @@ async function scrapeProfile(page, url) {
 
 (async () => {
 
-    const urls = JSON.parse(
+    let urls = JSON.parse(
         fs.readFileSync(
             './data/mutuals.json',
             'utf8'
         )
     );
+
+    const profileLimit =
+        Number.parseInt(process.env.PROFILE_LIMIT || '', 10);
+
+    if (Number.isInteger(profileLimit) && profileLimit > 0) {
+        urls = urls.slice(0, profileLimit);
+    }
 
     const { browser, page } =
         await startBrowser();
@@ -95,10 +410,7 @@ async function scrapeProfile(page, url) {
 
     for (const url of urls) {
 
-        console.log(
-            'Checking:',
-            url
-        );
+        console.log('Checking:', url);
 
         const profile =
             await scrapeProfile(
@@ -110,6 +422,14 @@ async function scrapeProfile(page, url) {
             scoreProfile(profile);
 
         results.push(profile);
+
+        console.log({
+            name: profile.name,
+            headline: profile.headline,
+            company: profile.company,
+            location: profile.location,
+            score: profile.score
+        });
     }
 
     results.sort(
@@ -124,9 +444,9 @@ async function scrapeProfile(page, url) {
     for (const r of results) {
 
         csv.push(
-            `"${r.name.replace(/"/g,'')}",` +
-            `"${r.company.replace(/"/g,'')}",` +
-            `"${r.location.replace(/"/g,'')}",` +
+            `"${(r.name || '').replace(/"/g, '')}",` +
+            `"${(r.company || '').replace(/"/g, '')}",` +
+            `"${(r.location || '').replace(/"/g, '')}",` +
             `${r.score},` +
             `"${r.url}"`
         );
@@ -138,9 +458,7 @@ async function scrapeProfile(page, url) {
     );
 
     console.log('');
-    console.log(
-        'Saved: data/ranked-mutuals.csv'
-    );
+    console.log('Saved: data/ranked-mutuals.csv');
 
     await browser.close();
 
