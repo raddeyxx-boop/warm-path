@@ -1,5 +1,16 @@
 const fs = require('fs');
 const startBrowser = require('../services/browser');
+const {
+    batchArray,
+    getCachedEntry,
+    isFatalError,
+    loadCache,
+    parsePositiveInteger,
+    safeGoto,
+    saveCache,
+    setCachedEntry
+} = require('../services/scrape-utils');
+const { sleep } = require('../utils/delay');
 
 function scoreProfile(profile) {
 
@@ -44,58 +55,27 @@ function scoreProfile(profile) {
     return score;
 }
 
-async function gotoProfile(page, url) {
+async function scrapeProfile(page, url, cache) {
 
-    let currentPage = page;
-    let lastError = null;
+    const cached = getCachedEntry(url, cache);
 
-    for (let attempt = 1; attempt <= 3; attempt++) {
-
-        try {
-
-            await currentPage.goto(url, {
-                waitUntil: 'domcontentloaded',
-                timeout: 90000
-            });
-
-            return currentPage;
-
-        } catch (err) {
-
-            lastError = err;
-
-            console.log(
-                `Navigation attempt ${attempt} failed: ${err.message.split('\n')[0]}`
-            );
-
-            if (attempt < 3) {
-                await currentPage.waitForTimeout(2000)
-                    .catch(() => {});
-
-                if (
-                    err.message.includes('ERR_ABORTED') ||
-                    err.message.includes('frame was detached') ||
-                    currentPage.isClosed()
-                ) {
-                    currentPage = await currentPage.context().newPage();
-                }
-            }
-        }
+    if (cached) {
+        console.log('Cached profile for ' + url);
+        return { ...cached, cached: true };
     }
-
-    throw lastError;
-}
-
-async function scrapeProfile(page, url) {
 
     try {
 
-        page = await gotoProfile(page, url);
+        await safeGoto(page, url, {
+            retries: 3,
+            initialDelay: 5000,
+            maxDelay: 20000
+        });
 
         await page.waitForLoadState('networkidle')
             .catch(() => {});
 
-        await page.waitForTimeout(4000);
+        await sleep(4000, 7000);
 
         const profile = await page.evaluate(() => {
 
@@ -364,7 +344,7 @@ async function scrapeProfile(page, url) {
             };
         });
 
-        return {
+        const result = {
             url,
             name: profile.name || '',
             headline: profile.headline || '',
@@ -372,10 +352,19 @@ async function scrapeProfile(page, url) {
             location: profile.location || ''
         };
 
+        setCachedEntry(url, result, cache);
+        saveCache(cache, 'ranked-mutuals-cache');
+
+        return result;
+
     } catch (err) {
 
         console.log('Failed:', url);
         console.log(err.message);
+
+        if (isFatalError(err)) {
+            throw err;
+        }
 
         return {
             url,
@@ -396,10 +385,10 @@ async function scrapeProfile(page, url) {
         )
     );
 
-    const profileLimit =
-        Number.parseInt(process.env.PROFILE_LIMIT || '', 10);
+    const profileLimit = parsePositiveInteger(process.env.PROFILE_LIMIT, 0);
+    const batchSize = parsePositiveInteger(process.env.BATCH_SIZE, 3);
 
-    if (Number.isInteger(profileLimit) && profileLimit > 0) {
+    if (profileLimit > 0) {
         urls = urls.slice(0, profileLimit);
     }
 
@@ -407,29 +396,60 @@ async function scrapeProfile(page, url) {
         await startBrowser();
 
     const results = [];
+    const cache = loadCache('ranked-mutuals-cache');
+    const batches = batchArray(urls, batchSize);
+    let consecutiveFailures = 0;
+    let stopped = false;
 
-    for (const url of urls) {
+    console.log('Processing ' + urls.length + ' mutuals in ' + batches.length + ' batch(es).');
 
-        console.log('Checking:', url);
+    for (const batch of batches) {
+        for (const url of batch) {
 
-        const profile =
-            await scrapeProfile(
-                page,
-                url
-            );
+            console.log('Checking:', url);
 
-        profile.score =
-            scoreProfile(profile);
+            try {
+                const profile =
+                    await scrapeProfile(
+                        page,
+                        url,
+                        cache
+                    );
 
-        results.push(profile);
+                profile.score =
+                    scoreProfile(profile);
 
-        console.log({
-            name: profile.name,
-            headline: profile.headline,
-            company: profile.company,
-            location: profile.location,
-            score: profile.score
-        });
+                results.push(profile);
+                consecutiveFailures = 0;
+
+                console.log({
+                    name: profile.name,
+                    headline: profile.headline,
+                    company: profile.company,
+                    location: profile.location,
+                    score: profile.score
+                });
+            } catch (err) {
+                consecutiveFailures += 1;
+                console.error('Failed: ' + url);
+                console.error(err.message);
+
+                if (isFatalError(err) || consecutiveFailures >= 3) {
+                    console.error('Stopping due to repeated failures or blocking.');
+                    stopped = true;
+                    break;
+                }
+            }
+
+            await sleep(6000, 10000);
+        }
+
+        if (stopped) {
+            break;
+        }
+
+        console.log('Batch complete. Pausing before next batch.');
+        await sleep(10000, 15000);
     }
 
     results.sort(

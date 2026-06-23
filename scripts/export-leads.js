@@ -1,177 +1,191 @@
 const fs = require('fs');
 const csv = require('csv-parser');
 const startBrowser = require('../services/browser');
+const {
+    batchArray,
+    getCachedEntry,
+    loadCache,
+    parsePositiveInteger,
+    safeGoto,
+    saveCache,
+    setCachedEntry
+} = require('../services/scrape-utils');
+const { sleep } = require('../utils/delay');
 
-async function scrapeProfile(page, profileUrl) {
+async function scrapeProfile(page, profileUrl, cache) {
+    const cached = getCachedEntry(profileUrl, cache);
 
-    await page.goto(profileUrl, {
-        waitUntil: 'domcontentloaded'
-    });
-
-    await page.waitForTimeout(5000);
-
-    const pageText = await page
-        .locator('main')
-        .textContent();
-
-    const profile = {
-        url: profileUrl,
-        name: '',
-        pronouns: '',
-        headline: '',
-        companyEducation: '',
-        location: '',
-        status: 'unknown'
-    };
-
-    // Pronouns
-    const pronounMatch = pageText.match(
-        /(He\/Him|She\/Her|They\/Them)/i
-    );
-
-    if (pronounMatch) {
-        profile.pronouns = pronounMatch[1];
+    if (cached) {
+        console.log(`Cached result for ${profileUrl}`);
+        return { ...cached, cached: true };
     }
 
-    // Headline
-    const headlineMatch = pageText.match(
-        /(Founder\s*&\s*CEO.*?)(Indpro\s*·)/i
-    );
+    try {
+        await safeGoto(page, profileUrl, {
+            retries: 3,
+            initialDelay: 5000,
+            maxDelay: 15000
+        });
 
-    if (headlineMatch) {
-        profile.headline =
-            headlineMatch[1].trim();
-    }
+        await sleep(3000, 6000);
 
-    // Company + Education
-    const companyMatch = pageText.match(
-        /(Indpro\s*·\s*Uppsala University)/i
-    );
+        const pageText = (await page.locator('main').textContent()) || '';
 
-    if (companyMatch) {
-        profile.companyEducation =
-            companyMatch[1].trim();
-    }
+        const profile = {
+            url: profileUrl,
+            name: '',
+            pronouns: '',
+            headline: '',
+            companyEducation: '',
+            location: '',
+            status: 'unknown'
+        };
 
-    // Location
-    const locationMatch = pageText.match(
-        /([A-Za-zÀ-ÿ\s]+,\s*[A-Za-zÀ-ÿ\s]+,\s*Sweden)/
-    );
+        const pronounMatch = pageText.match(
+            /(He\/Him|She\/Her|They\/Them)/i
+        );
 
-    if (locationMatch) {
-        profile.location =
-            locationMatch[1].trim();
-    }
+        if (pronounMatch) {
+            profile.pronouns = pronounMatch[1];
+        }
 
-    // Status
-    const connectLink = page
-        .locator('a[href*="/preload/custom-invite/"]')
-        .filter({ hasText: 'Connect' });
+        const headlineMatch = pageText.match(
+            /(Founder\s*&\s*CEO.*?)(Indpro\s*·)/i
+        );
 
-    if (await connectLink.count() > 0) {
+        if (headlineMatch) {
+            profile.headline = headlineMatch[1].trim();
+        }
 
-        profile.status =
-            'connect_available';
+        const companyMatch = pageText.match(
+            /(Indpro\s*·\s*Uppsala University)/i
+        );
 
-    } else {
+        if (companyMatch) {
+            profile.companyEducation = companyMatch[1].trim();
+        }
 
-        const followBtn =
-            page.locator('text=Follow');
+        const locationMatch = pageText.match(
+            /([A-Za-zÀ-ÿ\s]+,\s*[A-Za-zÀ-ÿ\s]+,\s*Sweden)/
+        );
 
-        if (await followBtn.count() > 0) {
+        if (locationMatch) {
+            profile.location = locationMatch[1].trim();
+        }
 
-            profile.status =
-                'follow_only';
+        const connectLink = page
+            .locator('a[href*="/preload/custom-invite/"]')
+            .filter({ hasText: 'Connect' });
 
+        if (await connectLink.count() > 0) {
+            profile.status = 'connect_available';
         } else {
+            const followBtn = page.locator('text=Follow');
 
-            const messageBtn =
-                page.locator('text=Message');
+            if (await followBtn.count() > 0) {
+                profile.status = 'follow_only';
+            } else {
+                const messageBtn = page.locator('text=Message');
 
-            if (await messageBtn.count() > 0) {
-
-                profile.status =
-                    'connected_or_message_available';
+                if (await messageBtn.count() > 0) {
+                    profile.status = 'connected_or_message_available';
+                }
             }
         }
-    }
 
-    return profile;
+        setCachedEntry(profileUrl, profile, cache);
+        saveCache(cache, 'profile-cache');
+
+        return profile;
+    } catch (err) {
+        if (err.blocked) {
+            console.error('Blocked or rate-limited while scraping:', profileUrl);
+            throw err;
+        }
+
+        console.error('Scrape failed for:', profileUrl, '-', err.message);
+        throw err;
+    }
 }
 
 (async () => {
-
     const rows = [];
+    const cache = loadCache('profile-cache');
+    const profileLimit = parsePositiveInteger(process.env.PROFILE_LIMIT, 0);
+    const batchSize = parsePositiveInteger(process.env.BATCH_SIZE, 3);
+    let consecutiveFailures = 0;
+    let stopped = false;
 
     fs.createReadStream('./data/profiles.csv')
         .pipe(csv())
         .on('data', row => rows.push(row))
         .on('end', async () => {
-
-            const { browser, page } =
-                await startBrowser();
-
+            const { browser, page } = await startBrowser();
             const results = [];
+            const selectedRows = profileLimit > 0 ? rows.slice(0, profileLimit) : rows;
+            const batches = batchArray(selectedRows, batchSize);
 
-            for (const row of rows) {
+            console.log(`Processing ${selectedRows.length} profiles in ${batches.length} batch(es).`);
 
-                try {
+            for (const batch of batches) {
+                for (const row of batch) {
+                    console.log(`\nProcessing: ${row.url}`);
 
-                    console.log(
-                        `Processing: ${row.url}`
-                    );
+                    try {
+                        const profile = await scrapeProfile(page, row.url, cache);
+                        results.push(profile);
+                        consecutiveFailures = 0;
+                    } catch (err) {
+                        consecutiveFailures += 1;
+                        results.push({
+                            url: row.url,
+                            name: '',
+                            pronouns: '',
+                            headline: '',
+                            companyEducation: '',
+                            location: '',
+                            status: 'error'
+                        });
 
-                    const profile =
-                        await scrapeProfile(
-                            page,
-                            row.url
-                        );
+                        console.error(`ERROR: ${row.url}`);
+                        console.error(err.message);
 
-                    results.push(profile);
+                        if (err.blocked || consecutiveFailures >= 3) {
+                            console.error('Stopping due to repeated failures or blocking.');
+                            stopped = true;
+                            break;
+                        }
+                    }
 
-                } catch (err) {
-
-                    console.log(
-                        `ERROR: ${row.url}`
-                    );
-
-                    console.log(err.message);
+                    await sleep(5000, 9000);
                 }
+
+                if (stopped || consecutiveFailures >= 3) {
+                    break;
+                }
+
+                console.log('Batch complete. Pausing between batches.');
+                await sleep(8000, 12000);
             }
 
-            const header =
-                'url,name,pronouns,headline,companyEducation,location,status\n';
+            const header = 'url,name,pronouns,headline,companyEducation,location,status\n';
+            const csvRows = results.map(profile => {
+                return [
+                    profile.url,
+                    `"${(profile.name || '').replace(/"/g, '""')}"`,
+                    `"${(profile.pronouns || '').replace(/"/g, '""')}"`,
+                    `"${(profile.headline || '').replace(/"/g, '""')}"`,
+                    `"${(profile.companyEducation || '').replace(/"/g, '""')}"`,
+                    `"${(profile.location || '').replace(/"/g, '""')}"`,
+                    `"${profile.status}"`
+                ].join(',');
+            }).join('\n');
 
-            const csvRows =
-                results.map(profile => {
+            fs.writeFileSync('./data/leads.csv', header + csvRows, 'utf8');
 
-                    return [
-                        profile.url,
-                        `"${profile.name}"`,
-                        `"${profile.pronouns}"`,
-                        `"${profile.headline}"`,
-                        `"${profile.companyEducation}"`,
-                        `"${profile.location}"`,
-                        `"${profile.status}"`
-                    ].join(',');
-
-                }).join('\n');
-
-            fs.writeFileSync(
-                './data/leads.csv',
-                header + csvRows
-            );
-
-            console.log(
-                '\nExport Complete'
-            );
-
-            console.log(
-                `Leads: ${results.length}`
-            );
+            console.log('\nExport Complete');
+            console.log(`Leads: ${results.length}`);
 
             await browser.close();
-
         });
-
 })();

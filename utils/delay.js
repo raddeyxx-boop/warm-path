@@ -29,7 +29,18 @@ async function sleep(min = 2000, max = 5000) {
     });
 }
 
+function backoffDelay(attempt = 1, base = 2000, max = 20000) {
+    return Math.min(max, base * Math.pow(2, Math.max(0, attempt - 1)));
+}
+
+async function sleepBackoff(attempt = 1, base = 2000, max = 20000) {
+    const delay = backoffDelay(attempt, base, max);
+    return sleep(delay, Math.min(delay + 1000, max));
+}
+
 module.exports = {
     randomDelay,
-    sleep
+    sleep,
+    sleepBackoff,
+    backoffDelay
 };
