@@ -1,0 +1,16 @@
+node_modules/
+
+# Local browser state and login/session material.
+fresh-profile/
+linkedin-profile/
+sessions/*.json
+
+# Generated run outputs and caches.
+data/*.csv
+data/*.json
+!data/.gitkeep
+
+# Logs and local environment.
+*.log
+.env
+.env.*

@@ -42,7 +42,7 @@ node index.js "Gurupreet Singh" "https://www.linkedin.com/in/gurupreet-singh-234
     JSON.stringify(targetConfig, null, 2)
   );
 
-  console.log("✓ Target saved");
+  console.log("OK Target saved");
 
   // Verify LinkedIn session
   console.log("\nChecking LinkedIn session...");
@@ -66,7 +66,7 @@ node index.js "Gurupreet Singh" "https://www.linkedin.com/in/gurupreet-singh-234
     throw new Error("LinkedIn session invalid.");
   }
 
-  console.log("✓ LinkedIn session verified");
+  console.log("OK LinkedIn session verified");
 
   await context.close();
 
