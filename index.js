@@ -1,105 +1,173 @@
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
-const { chromium } = require("playwright");
+const startBrowser = require("./services/browser");
+const searchTarget = require("./scripts/search-pavel");
+const collectMutuals = require("./scripts/collect-mutuals");
 
-(async () => {
-  const targetName = process.argv[2];
-  const targetUrl = process.argv[3];
-  const company = process.argv[4];
+const ROOT_DIR = __dirname;
+const DATA_DIR = path.join(ROOT_DIR, "data");
 
-  if (!targetName || !targetUrl || !company) {
-    console.log(`
+const FILES = {
+  target: path.join(DATA_DIR, "target.json"),
+  mutuals: path.join(DATA_DIR, "mutuals.json"),
+  mutualDetails: path.join(DATA_DIR, "mutual-details.json")
+};
+
+
+
+function printUsage() {
+  console.log(`
 Usage:
 
-node index.js "Name" "LinkedIn URL" "Company"
+node index.js "Target Name"
 
-Example:
+Optional:
 
-node index.js "Gurupreet Singh" "https://www.linkedin.com/in/gurupreet-singh-2344aa2bb/" "Indpro"
+node index.js "Target Name" "LinkedIn URL"
+node index.js "Target Name" "LinkedIn URL" "Company"
 `);
-    process.exit(1);
+}
+
+function formatDuration(startTime) {
+  const elapsedMs = Date.now() - startTime;
+  return (elapsedMs / 1000).toFixed(1) + "s";
+}
+
+function parseArgs(argv) {
+  const targetName = (argv[2] || "").trim();
+  const targetUrl = (argv[3] || "").trim();
+  const company = (argv[4] || "").trim();
+
+  if (!targetName) {
+    throw new Error("Target name is required.");
   }
 
-  console.log("\n=================================");
-  console.log("LINKEDIN WARM PATH FINDER");
-  console.log("=================================");
-  console.log("Target :", targetName);
-  console.log("Company:", company);
-  console.log("URL    :", targetUrl);
-  console.log("=================================\n");
-
-  // Save target configuration
-  const targetConfig = {
+  return {
     name: targetName,
     company,
     url: targetUrl,
     createdAt: new Date().toISOString()
   };
+}
+
+function ensureDataDirectory() {
+  fs.mkdirSync(DATA_DIR, {
+    recursive: true
+  });
+}
+
+function saveTargetConfig(targetConfig) {
+  ensureDataDirectory();
 
   fs.writeFileSync(
-    path.join(__dirname, "data", "target.json"),
-    JSON.stringify(targetConfig, null, 2)
+    FILES.target,
+    JSON.stringify(targetConfig, null, 2) + "\n",
+    "utf8"
   );
+}
 
-  console.log("OK Target saved");
-
-  // Verify LinkedIn session
-  console.log("\nChecking LinkedIn session...");
-
-  const context = await chromium.launchPersistentContext(
-    "C:\\Users\\3iwa\\AppData\\Local\\Google\\Chrome\\User Data",
-    {
-      channel: "chrome",
-      headless: false,
-      args: ["--profile-directory=Profile 1"]
+function clearPreviousOutputs() {
+  for (const filePath of [
+    FILES.mutuals,
+    FILES.mutualDetails
+  ]) {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
     }
-  );
-
-  const page = context.pages()[0] || await context.newPage();
-
-  await page.goto("https://www.linkedin.com/feed/", {
-    waitUntil: "networkidle"
-  });
-
-  if (!page.url().includes("linkedin.com")) {
-    throw new Error("LinkedIn session invalid.");
   }
+}
 
-  console.log("OK LinkedIn session verified");
 
-  await context.close();
+
+
+function logHeader(targetConfig) {
+  console.log("");
+  console.log("=====================================");
+  console.log("LinkedIn Warm Path Finder");
+  console.log("=====================================");
+  console.log("");
+  console.log("Target :", targetConfig.name);
+  console.log("Company:", targetConfig.company || "Not provided");
+  console.log("URL    :", targetConfig.url || "Not provided");
+}
+
+function logOutputs() {
+  console.log("");
+  console.log("Output Files:");
+  console.log(path.relative(ROOT_DIR, FILES.target));
+  console.log(path.relative(ROOT_DIR, FILES.mutuals));
+  console.log(path.relative(ROOT_DIR, FILES.mutualDetails));
+}
+
+async function main() {
+  const startedAt = Date.now();
 
   try {
+    const targetConfig = parseArgs(process.argv);
 
-    console.log("\nSTEP 1 - Collect Mutuals");
-    execSync("node scripts/collect-mutuals.js", {
-      stdio: "inherit"
-    });
+    logHeader(targetConfig);
 
-    console.log("\nSTEP 2 - Scrape Profile Details");
-    execSync("node scripts/scrape-profile-details.js", {
-      stdio: "inherit"
-    });
+    saveTargetConfig(targetConfig);
+    clearPreviousOutputs();
+    console.log("");
+    console.log("Target configuration saved");
 
-    console.log("\nSTEP 3 - Rank Mutuals");
-    execSync("node scripts/rank-mutuals.js", {
-      stdio: "inherit"
-    });
+ console.log("");
+console.log("Checking LinkedIn session...");
+const session = await startBrowser();
+console.log("Session verified");
 
-    console.log("\n=================================");
-    console.log("PIPELINE COMPLETE");
-    console.log("=================================");
-    console.log("Output Files:");
-    console.log("data/target.json");
-    console.log("data/mutuals.json");
-    console.log("data/ranked-mutuals.csv");
-    console.log("=================================\n");
+const { browser, page } = session;
+
+console.log("");
+console.log("STEP 1");
+console.log("Open Target & Connections");
+await searchTarget(page);
+
+console.log("");
+console.log("STEP 2");
+console.log("Collect Mutuals");
+await collectMutuals(page);
+
+const target = JSON.parse(
+  fs.readFileSync(FILES.target, "utf8")
+);
+
+const mutualConnections = JSON.parse(
+  fs.readFileSync(FILES.mutualDetails, "utf8")
+);
+
+console.log("");
+console.log("Sending data to n8n...");
+console.log("========== SENDING TO N8N ==========");
+console.log(JSON.stringify({
+    target,
+    mutual_connections: mutualConnections
+}, null, 2));
+console.log("====================================");
+
+
+console.log("Data sent to n8n successfully.");
+    console.log("");
+    console.log("Pipeline Complete");
+    console.log("Execution time:", formatDuration(startedAt));
+    logOutputs();
+    console.log("");
+    await browser.close();
 
   } catch (err) {
-    console.error("\nPIPELINE FAILED");
+    console.error("");
+    console.error("Pipeline Failed");
+    console.error("===============");
     console.error(err.message);
-    process.exit(1);
-  }
+    console.error("Execution time:", formatDuration(startedAt));
 
-})();
+    if (err.message === "Target name is required.") {
+      printUsage();
+    }
+
+    process.exitCode = 1;
+  }
+}
+
+main();

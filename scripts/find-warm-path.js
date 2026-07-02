@@ -7,7 +7,7 @@ const {
     collectPostLinks
 } = require('../services/warm-path-service');
 
-async function findWarmPath(profileUrl) {
+async function findWarmPath() {
 
     const { browser, page } =
         await startBrowser();
@@ -18,8 +18,14 @@ async function findWarmPath(profileUrl) {
             'Opening profile...'
         );
 
+        const target = require('../data/target.json');
+
+        if (!target.url) {
+            throw new Error('data/target.json must include a LinkedIn profile URL.');
+        }
+
         await page.goto(
-            profileUrl,
+            target.url,
             {
                 waitUntil: 'domcontentloaded'
             }
@@ -82,6 +88,4 @@ async function findWarmPath(profileUrl) {
     }
 }
 
-findWarmPath(
-    'https://www.linkedin.com/in/pavelsiddique/'
-);
+findWarmPath();

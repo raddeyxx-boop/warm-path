@@ -1,12 +1,14 @@
 const fs = require('fs');
 const startBrowser = require('../services/browser');
+const target = require('../data/target.json');
 
 (async () => {
 
     const { browser, page } = await startBrowser();
+    const query = encodeURIComponent(target.name || '');
 
     await page.goto(
-        'https://www.linkedin.com/search/results/people/?keywords=Pavel%20Siddique',
+        `https://www.linkedin.com/search/results/people/?keywords=${query}`,
         {
             waitUntil: 'domcontentloaded'
         }

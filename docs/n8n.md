@@ -1,6 +1,52 @@
-  # n8n Integration
+# n8n Integration
 
-Start the local integration server:
+The Playwright side of this project is a data collection pipeline. n8n should pass
+the current target into `index.js`, then consume the generated JSON files.
+
+## Webhook Payload
+
+Send the target dynamically from your webhook or previous n8n node:
+
+```json
+{
+  "target": "Target Name",
+  "url": "https://www.linkedin.com/in/target-profile/",
+  "company": "Company Name"
+}
+```
+
+Only `target` is required. `url` and `company` may be empty strings.
+
+## Execute Command Node
+
+Use an **Execute Command** node after your target extraction node.
+
+```powershell
+node index.js "{{$json.target}}" "{{$json.url || ''}}" "{{$json.company || ''}}"
+```
+
+If your extraction node returns `name` instead of `target`, use:
+
+```powershell
+node index.js "{{$json.name}}" "{{$json.url || ''}}" "{{$json.company || ''}}"
+```
+
+Do not type a real person name directly into the command. The value should come
+from the current n8n item.
+
+## Generated Files
+
+After a successful run, n8n can read:
+
+```text
+data/target.json
+data/mutuals.json
+data/mutual-details.json
+```
+
+## Local Integration Server
+
+The optional local server can still be started with:
 
 ```powershell
 npm run n8n
@@ -12,75 +58,8 @@ Default URL:
 http://127.0.0.1:5679
 ```
 
-## n8n HTTP Request Node
-
-Use an **HTTP Request** node with:
-
-```text
-Method: POST
-URL: http://127.0.0.1:5679/rank-mutuals
-Send Body: JSON
-```
-
-Example body:
-
-```json
-{
-  "urls": [
-    "https://www.linkedin.com/in/rahul-bothra-0231608",
-    "https://www.linkedin.com/in/gokul-rajan-5b146a18a"
-  ]
-}
-```
-
-For a quick test run:
-
-```json
-{
-  "urls": [
-    "https://www.linkedin.com/in/rahul-bothra-0231608"
-  ],
-  "profileLimit": 1
-}
-```
-
-The response contains:
-
-```json
-{
-  "ok": true,
-  "count": 1,
-  "results": [
-    {
-      "name": "Rahul Bothra",
-      "company": "Swiggy Institute of Chartered Accountants of India",
-      "location": "Bengaluru, Karnataka, India",
-      "score": 5,
-      "url": "https://www.linkedin.com/in/rahul-bothra-0231608"
-    }
-  ]
-}
-```
-
-## Optional Callback
-
-If you want the local server to send results back to an n8n Webhook node, start it with:
-
-```powershell
-$env:N8N_CALLBACK_URL="https://your-n8n-host/webhook/warm-path-results"
-npm run n8n
-```
-
-## Health Check
+Health check:
 
 ```text
 GET http://127.0.0.1:5679/health
 ```
-
-## Notes
-
-- The server writes incoming URLs to `data/mutuals.json`.
-- It runs `scripts/rank-mutuals.js`.
-- It returns parsed rows from `data/ranked-mutuals.csv`.
-- Only one ranking run is allowed at a time because the scripts use shared files.
-- LinkedIn scraping opens Chromium through the existing Playwright setup and saved session.
