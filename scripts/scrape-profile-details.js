@@ -81,9 +81,7 @@ function normalizeProfileUrl(value) {
     return "https://www.linkedin.com" +
         profilePath.replace(/\/?$/, "/");
 }
-
-function formatDuration(startTime) {
-    function normalizeCompanyName(value) {
+function normalizeCompanyName(value) {
 
     return (value || "")
         .toLowerCase()
@@ -95,6 +93,8 @@ function formatDuration(startTime) {
         .replace(/\s+/g, " ")
         .trim();
 }
+function formatDuration(startTime) {
+ 
     const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;
@@ -195,56 +195,19 @@ function looksLikeLocation(value) {
 }
 
 async function extractName(page, lines) {
-    function cleanName(value) {
-        const text = cleanText(value)
-            .replace(/\b(he\/him|she\/her|they\/them)\b.*$/i, "")
-            .replace(/\s*[\u00b7|]\s*(1st|2nd|3rd).*$/i, "")
-            .trim();
-
-        if (!text || text.length > 90) {
-            return "";
-        }
-
-        if (/\b(contact info|message|connect|followers|connections)\b/i.test(text)) {
-            return "";
-        }
-
-        return text;
-    }
-
     try {
-        const selectors = [
-            ".pv-text-details__left-panel h1",
-            "main h1.text-heading-xlarge",
-            "main h1"
-        ];
-
-        for (const selector of selectors) {
-            const locator = page.locator(selector).first();
-
-            if (!(await locator.count())) {
-                continue;
-            }
-
-            const name = cleanName(await locator.innerText({
-                timeout: 3000
-            }));
-
-            if (name) {
-                return name;
-            }
-        }
-    } catch (err) {}
-
-    for (const line of lines.slice(0, 8)) {
-        const name = cleanName(line);
+        const name = cleanText(
+            await page.locator(SELECTORS.name).first().textContent({
+                timeout: 5000
+            })
+        );
 
         if (name) {
             return name;
         }
-    }
+    } catch (err) {}
 
-    return "";
+    return lines[0] || "";
 }
 try {
 
@@ -252,93 +215,76 @@ try {
 
 } catch (err) {}
 async function extractHeadline(page, lines, name) {
-    function cleanHeadline(value) {
-        const headline = cleanText(value);
 
-        if (!headline || headline.length > 260) {
-            return "";
+    // Strategy 1: Read the text immediately below the H1
+    try {
+
+        const heading = page.locator("h1").first();
+
+        const container = heading.locator("xpath=..");
+
+        const text = cleanText(
+            await container.textContent({
+                timeout: 3000
+            })
+        );
+
+        if (text) {
+
+            const withoutName = text.replace(name, "").trim();
+
+            if (
+                withoutName &&
+                !looksLikeLocation(withoutName) &&
+                withoutName.length < 180
+            ) {
+                return withoutName;
+            }
         }
 
-        if (looksLikeLocation(headline)) {
-            return "";
-        }
+    } catch (err) {}
 
-        if (/\b(contact info|followers|connections|message|connect|highlights)\b/i.test(headline)) {
-            return "";
-        }
+    // Strategy 2: Existing selectors
+    const headline = await getFirstLocatorText(
+        page,
+        SELECTORS.headline
+    );
 
+    if (headline) {
         return headline;
     }
 
-    try {
-        const selectors = [
-            ".pv-text-details__left-panel div.text-body-medium.break-words",
-            ".pv-text-details__left-panel div.text-body-medium",
-            "main section:first-of-type div.text-body-medium.break-words"
-        ];
-
-        for (const selector of selectors) {
-            const locator = page.locator(selector).first();
-
-            if (!(await locator.count())) {
-                continue;
-            }
-
-            const headline = cleanHeadline(await locator.innerText({
-                timeout: 3000
-            }));
-
-            if (headline) {
-                return headline;
-            }
-        }
-    } catch (err) {}
-
-    const directHeadline = cleanHeadline(
-        await getFirstLocatorText(page, SELECTORS.headline)
+    // Strategy 3: Fallback from parsed lines
+    const nameIndex = lines.findIndex(
+        line => cleanText(line) === cleanText(name)
     );
 
-    if (directHeadline) {
-        return directHeadline;
-    }
-
-    const nameIndex = lines.findIndex(line => name && line.includes(name));
-
     if (nameIndex >= 0 && lines[nameIndex + 1]) {
-        return cleanHeadline(lines[nameIndex + 1]);
+
+        const next = cleanText(lines[nameIndex + 1]);
+
+        if (!looksLikeLocation(next)) {
+            return next;
+        }
     }
 
     return "";
 }
 
 async function extractCompany(page, lines, headline) {
-    function cleanCompany(value) {
-        let company = cleanText(value)
-            .replace(/\s+logo$/i, "")
-            .replace(/\s+company page$/i, "")
-            .trim();
+    const companyFromHeadline = extractCompanyFromHeadline(headline);
 
-        if (company.includes(" \u00b7 ")) {
-            company = company.split(" \u00b7 ")[0];
-        }
+    if (companyFromHeadline) {
+        return companyFromHeadline;
+    }
 
-        if (company.includes(" \u00b7 ")) {
-            company = company.split(" \u00b7 ")[0];
-        }
+    const headerCompany = await getFirstLocatorText(
+        page,
+        SELECTORS.companyHeader
+    );
 
-        if (company.includes(" \u00c2\u00b7 ")) {
-            company = company.split(" \u00c2\u00b7 ")[0];
-        }
-
-        if (!company || company.length > 120) {
-            return "";
-        }
-
-        if (/\b(experience|education|skills|connections|followers|contact info|present|yrs?|mos?)\b/i.test(company)) {
-            return "";
-        }
-
-        return company;
+    if (headerCompany) {
+        return headerCompany;
     }
 
     try {
@@ -350,120 +296,34 @@ async function extractCompany(page, lines, headline) {
             .first();
 
         if (await experienceSection.count()) {
-            const firstExperience = experienceSection.locator("li").first();
+            const experienceLines = toLines(
+                await experienceSection.textContent({
+                    timeout: 5000
+                })
+            );
 
-            if (await firstExperience.count()) {
-                const candidates = await firstExperience
-                    .locator("span[aria-hidden='true']")
-                    .evaluateAll(elements => elements
-                        .map(element => element.innerText || element.textContent || "")
-                        .map(text => text.replace(/\s+/g, " ").trim())
-                        .filter(Boolean));
+            const companyLine = experienceLines.find(line =>
+                / \u00b7 | \u00c2\u00b7 /.test(line) ||
+                /\b(full-time|part-time|self-employed|contract|freelance)\b/i.test(line)
+            );
 
-                const companyLine = candidates.find(candidate =>
-                    / \u00b7 | \u00c2\u00b7 /.test(candidate) ||
-                    /\b(full-time|part-time|self-employed|contract|freelance|internship)\b/i.test(candidate)
-                );
-
-                const companyFromLine = cleanCompany(companyLine || "");
-
-                if (companyFromLine) {
-                    return companyFromLine;
-                }
-
-                for (const candidate of candidates.slice(1, 5)) {
-                    const company = cleanCompany(candidate);
-
-                    if (company) {
-                        return company;
-                    }
-                }
+            if (companyLine) {
+                return cleanText(companyLine.split(/ \u00b7 | \u00c2\u00b7 /)[0]);
             }
         }
     } catch (err) {}
 
-    try {
-        const selectors = [
-            ".pv-text-details__right-panel a[href*='/company/'] span[aria-hidden='true']",
-            ".pv-text-details__right-panel a[href*='/company/']",
-            "main section:first-of-type a[href*='/company/'] span[aria-hidden='true']",
-            "main section:first-of-type a[href*='/company/']"
-        ];
+    const experienceFallback = getLineAfter(lines, "Experience");
 
-        for (const selector of selectors) {
-            const locator = page.locator(selector).first();
-
-            if (!(await locator.count())) {
-                continue;
-            }
-
-            const company = cleanCompany(await locator.innerText({
-                timeout: 3000
-            }));
-
-            if (company) {
-                return company;
-            }
-        }
-    } catch (err) {}
-
-    const companyFromHeadline = cleanCompany(
-        extractCompanyFromHeadline(headline)
-    );
-
-    if (companyFromHeadline) {
-        return companyFromHeadline;
+    if (experienceFallback) {
+        return experienceFallback;
     }
 
     return "";
 }
 
 async function extractCollege(page, lines) {
-    function cleanCollege(value) {
-        const college = cleanText(value);
-
-        if (!college || college.length > 160) {
-            return "";
-        }
-
-        if (/\b(education|degree|grade|activities|from|to|present|yrs?|mos?|bachelor|master)\b/i.test(college)) {
-            return "";
-        }
-
-        return college;
-    }
-
-    try {
-        const educationSection = page
-            .locator("section")
-            .filter({
-                has: page.locator("#education")
-            })
-            .first();
-
-        if (await educationSection.count()) {
-            const firstEducation = educationSection.locator("li").first();
-
-            if (await firstEducation.count()) {
-                const candidates = await firstEducation
-                    .locator("span[aria-hidden='true']")
-                    .evaluateAll(elements => elements
-                        .map(element => element.innerText || element.textContent || "")
-                        .map(text => text.replace(/\s+/g, " ").trim())
-                        .filter(Boolean));
-
-                for (const candidate of candidates) {
-                    const college = cleanCollege(candidate);
-
-                    if (college) {
-                        return college;
-                    }
-                }
-            }
-        }
-    } catch (err) {}
-
-    const education = cleanCollege(getLineAfter(lines, "Education"));
+    const education = getLineAfter(lines, "Education");
 
     if (education) {
         return education;
@@ -473,88 +333,16 @@ async function extractCollege(page, lines) {
 }
 
 async function extractLocation(page, lines) {
-    function cleanLocation(value) {
-        const location = cleanText(value)
-            .replace(/\s*\u00b7\s*Contact info.*$/i, "")
-            .replace(/\s*\u00b7\s*Contact info.*$/i, "")
-            .trim();
+    const location = await getFirstLocatorText(page, SELECTORS.location);
 
-        if (!location || location.length > 120) {
-            return "";
-        }
-
-        if (!looksLikeLocation(location)) {
-            return "";
-        }
-
-        if (/\b(message|connect|followers|connections|contact info|headline)\b/i.test(location)) {
-            return "";
-        }
-
+    if (location && looksLikeLocation(location)) {
         return location;
     }
 
-    try {
-        const selectors = [
-            ".pv-text-details__left-panel span.text-body-small.inline.t-black--light.break-words",
-            ".pv-text-details__left-panel span.text-body-small.inline",
-            ".pv-text-details__left-panel span.text-body-small.t-black--light",
-            "main section:first-of-type span.text-body-small.inline"
-        ];
-
-        for (const selector of selectors) {
-            const locator = page.locator(selector).first();
-
-            if (!(await locator.count())) {
-                continue;
-            }
-
-            const location = cleanLocation(await locator.innerText({
-                timeout: 3000
-            }));
-
-            if (location) {
-                return location;
-            }
-        }
-    } catch (err) {}
-
-    const location = cleanLocation(
-        await getFirstLocatorText(page, SELECTORS.location)
-    );
-
-    if (location) {
-        return location;
-    }
-
-    for (const line of lines.slice(0, 12)) {
-        const fallbackLocation = cleanLocation(line);
-
-        if (fallbackLocation) {
-            return fallbackLocation;
-        }
-    }
-
-    return "";
+    return lines.find(looksLikeLocation) || location || "";
 }
 
 async function extractAbout(page, lines) {
-    function cleanAbout(value) {
-        const about = cleanText(value)
-            .replace(/^about\s*/i, "")
-            .trim();
-
-        if (!about || about.length > 5000) {
-            return "";
-        }
-
-        if (/\b(ad choices|linkedin corporation|more profiles for you|manage your account)\b/i.test(about)) {
-            return "";
-        }
-
-        return about;
-    }
-
     try {
         const aboutSection = page
             .locator("section")
@@ -564,48 +352,13 @@ async function extractAbout(page, lines) {
             .first();
 
         if (await aboutSection.count()) {
-            const aboutTextLocator = aboutSection
-                .locator(".inline-show-more-text span[aria-hidden='true']")
-                .first();
+            const aboutLines = toLines(
+                await aboutSection.textContent({
+                    timeout: 5000
+                })
+            ).filter(line => !/^about$/i.test(line));
 
-            if (await aboutTextLocator.count()) {
-                const about = cleanAbout(await aboutTextLocator.innerText({
-                    timeout: 3000
-                }));
-
-                if (about) {
-                    return about;
-                }
-            }
-
-            const sectionLines = toLines(await aboutSection.innerText({
-                timeout: 5000
-            }));
-            const stopLabels = new Set([
-                "activity",
-                "experience",
-                "education",
-                "skills",
-                "top skills",
-                "licenses & certifications",
-                "recommendations",
-                "interests"
-            ]);
-            const aboutLines = [];
-
-            for (const line of sectionLines) {
-                if (/^about$/i.test(line)) {
-                    continue;
-                }
-
-                if (stopLabels.has(line.toLowerCase())) {
-                    break;
-                }
-
-                aboutLines.push(line);
-            }
-
-            const about = cleanAbout(aboutLines.join(" "));
+            const about = cleanText(aboutLines.join(" "));
 
             if (about) {
                 return about;
@@ -636,14 +389,10 @@ async function extractAbout(page, lines) {
             break;
         }
 
-        if (line.length > 1000) {
-            break;
-        }
-
         aboutLines.push(line);
     }
 
-    return cleanAbout(aboutLines.join(" "));
+    return cleanText(aboutLines.join(" "));
 }
 
 async function extractConnectionStatus(page) {
