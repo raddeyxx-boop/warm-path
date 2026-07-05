@@ -34,18 +34,32 @@ function formatDuration(startTime) {
 }
 
 function parseArgs(argv) {
+
   const targetName = (argv[2] || "").trim();
-  const targetUrl = (argv[3] || "").trim();
-  const company = (argv[4] || "").trim();
+  const secondArg = (argv[3] || "").trim();
+  const thirdArg = (argv[4] || "").trim();
 
   if (!targetName) {
     throw new Error("Target name is required.");
   }
 
+  let url = "";
+  let company = "";
+
+  if (
+    secondArg.startsWith("http://") ||
+    secondArg.startsWith("https://")
+  ) {
+    url = secondArg;
+    company = thirdArg;
+  } else {
+    company = secondArg;
+  }
+
   return {
     name: targetName,
     company,
-    url: targetUrl,
+    url,
     createdAt: new Date().toISOString()
   };
 }
@@ -104,6 +118,8 @@ async function main() {
 
   try {
     const targetConfig = parseArgs(process.argv);
+    console.log("Parsed targetConfig:");
+console.log(targetConfig);
 
     logHeader(targetConfig);
 

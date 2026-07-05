@@ -87,6 +87,38 @@ async function loadTarget() {
 
 
 async function collectProfileUrls(page) {
+ async function collectProfiles(page) {
+
+    await page.waitForTimeout(TIMEOUTS.afterManualFilterMs);
+
+    const profiles = await page
+        .locator(SELECTORS.profileLinks)
+        .evaluateAll(links => {
+
+            const results = [];
+
+            for (const link of links) {
+
+                const href = link.href;
+
+                const name =
+                    link.textContent?.trim() || "";
+
+                results.push({
+                    name,
+                    linkedin_url: href
+                });
+            }
+
+            return results;
+        });
+
+    if (!profiles.length) {
+        console.log("No visible LinkedIn profiles found.");
+    }
+
+    return profiles;
+}
     await page.waitForTimeout(TIMEOUTS.afterManualFilterMs);
 
     const urls = await page
@@ -99,6 +131,34 @@ async function collectProfileUrls(page) {
 
     return urls;
 }
+async function collectProfiles(page) {
+
+    await page.waitForTimeout(TIMEOUTS.afterManualFilterMs);
+
+    const profiles = await page
+        .locator(SELECTORS.profileLinks)
+        .evaluateAll(links => {
+
+            const results = [];
+
+            for (const link of links) {
+
+                results.push({
+                    name: (link.textContent || "").trim(),
+                    linkedin_url: link.href
+                });
+
+            }
+
+            return results;
+        });
+
+    if (!profiles.length) {
+        console.log("No visible LinkedIn profiles found.");
+    }
+
+    return profiles;
+}
 async function scrollToBottom(page) {
 
 let previousCount = 0;
@@ -108,7 +168,18 @@ let stableRounds = 0;
         // Scroll down slowly
 const distance =
     250 + Math.floor(Math.random() * 350);
+const viewport = page.viewportSize();
 
+if (viewport) {
+
+    await page.mouse.move(
+        200 + Math.random() * (viewport.width - 400),
+        150 + Math.random() * (viewport.height - 250),
+        {
+            steps: 10 + Math.floor(Math.random() * 15)
+        }
+    );
+}
 await page.mouse.wheel(0, distance);
 const pause =
     800 + Math.floor(Math.random() * 1000);
@@ -149,29 +220,31 @@ async function goToNextPage(page) {
         return false;
     }
 
-    const disabled = await nextButton.getAttribute("disabled");
-
-    if (disabled !== null) {
+    if (await nextButton.isDisabled()) {
         return false;
     }
 
-    await page.waitForTimeout(
-        1000 + Math.floor(Math.random() * 1500)
-    );
-
+    // Scroll the button into view
     await nextButton.scrollIntoViewIfNeeded();
 
-  await nextButton.click();
+    // Extra wheel to move the cards away
+    await page.mouse.wheel(0, 800);
 
-console.log("Moving to next page...");
+    await page.waitForTimeout(1000);
 
-await page.waitForTimeout(
-    3000 + Math.floor(Math.random() * 1500)
-);
+    console.log("Moving to next page...");
 
-console.log("Next page opened.");
+    await nextButton.click({
+        force: true
+    });
 
-return true;
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.waitForTimeout(3000);
+
+    console.log("Next page opened.");
+
+    return true;
 }
 
 function normalizeUrls(urls, targetUrl) {
@@ -190,6 +263,38 @@ function normalizeUrls(urls, targetUrl) {
     }
 
     return [...uniqueUrls];
+}
+function normalizeProfiles(profiles, targetUrl) {
+
+    const normalizedTargetUrl =
+        normalizeLinkedInProfileUrl(targetUrl);
+
+    const uniqueProfiles = new Map();
+
+    for (const profile of profiles) {
+
+       const normalizedUrl =
+    normalizeProfileUrl(
+        mutualProfile.linkedin_url
+    );
+        if (!normalizedUrl) {
+            continue;
+        }
+
+        if (
+            normalizedTargetUrl &&
+            normalizedUrl === normalizedTargetUrl
+        ) {
+            continue;
+        }
+
+        uniqueProfiles.set(normalizedUrl, {
+            name: (profile.name || "").trim(),
+            linkedin_url: normalizedUrl
+        });
+    }
+
+    return [...uniqueProfiles.values()];
 }
 
 async function saveResults(profileUrls) {
@@ -220,8 +325,7 @@ async function collectMutuals(page) {
 
        
 
- let collectedUrls = [];
-
+let collectedProfiles = [];
 while (true) {
 
 console.log("==============================");
@@ -229,9 +333,16 @@ console.log("Processing current page...");
 console.log("==============================");
     await scrollToBottom(page);
 
-    collectedUrls.push(
-        ...(await collectProfileUrls(page))
-    );
+const profiles = await collectProfiles(page);
+
+collectedProfiles.push(...profiles);
+
+console.log("");
+console.log("First profile collected:");
+console.log(profiles[0]);
+console.log("");
+
+
 
     const hasNext = await goToNextPage(page);
 
@@ -240,14 +351,13 @@ console.log("==============================");
     }
 }
 
-const profileUrls = normalizeUrls(
-    collectedUrls,
+const profiles = normalizeProfiles(
+    collectedProfiles,
     target.url
 );
-        await saveResults(profileUrls);
-
+await saveResults(profiles);
         console.log("");
-        console.log("Profiles collected:", profileUrls.length);
+console.log("Profiles collected:", profiles.length);
         console.log("Saved: data/mutuals.json");
         console.log("Time taken:", formatDuration(startedAt));
         console.log("");

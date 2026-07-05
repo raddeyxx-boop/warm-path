@@ -43,7 +43,7 @@ async function assertLinkedInAuthenticated(page, navigationTimeout) {
     });
 
     await page.waitForLoadState("networkidle", {
-        timeout: 15000
+        timeout: 1000
     }).catch(() => {});
 
     const currentUrl = page.url();
@@ -76,16 +76,16 @@ async function startBrowser(options = {}) {
     try {
         assertSessionExists(sessionPath);
 
-        browser = await chromium.launch({
-            channel: config.channel,
-            headless: config.headless,
-            slowMo: config.slowMo,
-            ...(config.launchOptions || {})
-        });
-
+     browser = await chromium.launch({
+    channel: config.channel,
+    headless: config.headless,
+    slowMo: config.slowMo,
+    args: ["--start-maximized"],
+    ...(config.launchOptions || {})
+});
         const context = await browser.newContext({
             storageState: sessionPath,
-            viewport: config.viewport,
+viewport: null,
             ...(config.contextOptions || {})
         });
 

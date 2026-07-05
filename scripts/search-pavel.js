@@ -1,7 +1,108 @@
-const target = require("../data/target.json");
+const fs = require("fs");
+const path = require("path");
 
-async function searchTarget(page) {
+function getTarget() {
+    return JSON.parse(
+        fs.readFileSync(
+            path.join(__dirname, "../data/target.json"),
+            "utf8"
+        )
+    );
+}
+async function openFilters(page) {
 
+    console.log("Opening filters...");
+
+    const allFilters = page.getByRole("button", {
+        name: /all filters/i
+    });
+
+    await allFilters.waitFor({
+        state: "visible",
+        timeout: 10000
+    });
+
+    await allFilters.click();
+
+    await page.waitForTimeout(2000);
+
+    console.log("Filters opened.");
+}
+
+async function selectCompany(page, company) {
+
+    console.log("Selecting:", company);
+
+    const checkbox = page.locator(
+        `div[role="checkbox"][aria-label="${company}"]`
+    );
+
+    console.log("Count:", await checkbox.count());
+
+    if (await checkbox.count() > 0) {
+        console.log("Found checkbox");
+
+        await checkbox.first().highlight();
+
+        await page.waitForTimeout(3000);
+
+        await checkbox.first().click({ force: true });
+
+        console.log("Clicked");
+    } else {
+        console.log("Checkbox NOT found");
+    }
+}
+async function showResults(page) {
+
+    console.log("Clicking Show results...");
+
+    const link = page.locator(
+        'a:has(span:text-is("Show results"))'
+    );
+
+console.log("Found:", await link.count());
+console.log(await link.evaluate(el => el.outerHTML));
+    await link.highlight();
+
+    await page.waitForTimeout(1000);
+
+    await link.click({
+        force: true
+    });
+
+    console.log("Show results clicked.");
+
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.waitForTimeout(3000);
+}
+
+async function selectSchool(page, school) {
+
+    console.log("Selecting school:", school);
+
+    const heading = page.locator("h2", {
+        hasText: "Schools"
+    });
+
+    await heading.scrollIntoViewIfNeeded();
+
+    await page.waitForTimeout(1000);
+
+    const schoolName = page.locator("p", {
+        hasText: school
+    }).first();
+
+    await schoolName.click();
+
+    await page.waitForTimeout(1000);
+
+    console.log("School selected.");
+}
+
+async function runSearchPipeline(page) {
+    const target = getTarget();
 
     // Open LinkedIn feed
     await page.goto(
@@ -92,8 +193,26 @@ for (let i = 0; i < count; i++) {
 
         console.log("Matching target found.");
 
-        await suggestion.click();
+const suggestionBox = await suggestion.boundingBox();
 
+if (suggestionBox) {
+
+    await page.mouse.move(
+        suggestionBox.x + suggestionBox.width / 2,
+        suggestionBox.y + suggestionBox.height / 2,
+        {
+            steps: 30 + Math.floor(Math.random() * 20)
+        }
+    );
+
+    await page.waitForTimeout(
+        250 + Math.floor(Math.random() * 450)
+    );
+}
+
+await suggestion.click({
+    delay: 80 + Math.floor(Math.random() * 120)
+});
         found = true;
 
         break;
@@ -155,15 +274,21 @@ console.log("Connections opened:");
 console.log(page.url());
 
 console.log("Preparing connection filters...");
-// TODO:
-// 1. If "1st" is currently selected, deselect it.
-// 2. If "3rd+" is currently selected, deselect it.
-// 3. Select the "2nd" filter.
-// 4. Wait for the results to refresh.
 
-await page.waitForTimeout(3000);
+console.log("Preparing connection filters...");
+
+await openFilters(page);
+console.log("Target object:", target);
+console.log("Company:", target.company);
+console.log("Company value =", JSON.stringify(target.company));
+
+await selectCompany(page, target.company);
+
+await page.waitForTimeout(1000);
+
+await showResults(page);
 
 return page;
 }
 
-module.exports = searchTarget;
+module.exports = runSearchPipeline;

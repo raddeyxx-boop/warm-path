@@ -2,19 +2,26 @@ const fs = require("fs/promises");
 const path = require("path");
 const startBrowser = require("../services/browser");
 
+const LINKEDIN_HOME_URL = "https://www.linkedin.com/feed/";
 const MUTUALS_PATH = path.resolve(__dirname, "..", "data", "mutuals.json");
 const OUTPUT_PATH = path.resolve(__dirname, "..", "data", "mutual-details.json");
 const TARGET_PATH = path.resolve(__dirname, "..", "data", "target.json");
+
 const TIMEOUTS = {
     profileMs: 60000,
     pageLoadMs: 45000,
     contentMs: 15000,
-    afterLoadMs: 2500
+    afterLoadMs: 2500,
+    searchBoxMs: 15000,
+    suggestionsMs: 12000,
+    navigationMs: 20000
 };
 
 const SELECTORS = {
     main: "main",
     name: "h1",
+    searchInput: 'input[placeholder*="Search"]',
+    searchSuggestions: '[role="listbox"] a[href*="/in/"]',
     headline: [
         ".pv-text-details__left-panel div.text-body-medium",
         ".text-body-medium.break-words",
@@ -32,6 +39,14 @@ const SELECTORS = {
     ]
 };
 
+function randomInt(min, max) {
+    return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+async function pause(page, minMs, maxMs) {
+    await page.waitForTimeout(randomInt(minMs, maxMs));
+}
+
 function cleanText(value) {
     return (value || "").replace(/\s+/g, " ").trim();
 }
@@ -45,7 +60,7 @@ function toLines(value) {
 
 function isLinkedInProfileUrl(value) {
     try {
-        const url = new URL(value);
+        const url = new URL(value, "https://www.linkedin.com");
         const hostname = url.hostname.replace(/^www\./, "");
 
         return hostname === "linkedin.com" &&
@@ -60,7 +75,7 @@ function normalizeProfileUrl(value) {
         return "";
     }
 
-    const url = new URL(value);
+    const url = new URL(value, "https://www.linkedin.com");
     const profilePath = url.pathname.match(/^\/in\/[^/]+\/?/i)[0];
 
     return "https://www.linkedin.com" +
@@ -68,6 +83,18 @@ function normalizeProfileUrl(value) {
 }
 
 function formatDuration(startTime) {
+    function normalizeCompanyName(value) {
+
+    return (value || "")
+        .toLowerCase()
+        .replace(/\bab\b/g, "")
+        .replace(/\binc\b/g, "")
+        .replace(/\bltd\b/g, "")
+        .replace(/\bllc\b/g, "")
+        .replace(/[^\w\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+}
     const elapsedSeconds = Math.round((Date.now() - startTime) / 1000);
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;
@@ -77,6 +104,15 @@ function formatDuration(startTime) {
     }
 
     return seconds + "s";
+}
+
+function isUnexpectedLinkedInUrl(url) {
+    return (
+        url.includes("/login") ||
+        url.includes("/checkpoint") ||
+        url.includes("/uas/login") ||
+        url.includes("/404")
+    );
 }
 
 async function readJsonFile(filePath, missingMessage) {
@@ -159,62 +195,152 @@ function looksLikeLocation(value) {
 }
 
 async function extractName(page, lines) {
+    function cleanName(value) {
+        const text = cleanText(value)
+            .replace(/\b(he\/him|she\/her|they\/them)\b.*$/i, "")
+            .replace(/\s*[\u00b7|]\s*(1st|2nd|3rd).*$/i, "")
+            .trim();
+
+        if (!text || text.length > 90) {
+            return "";
+        }
+
+        if (/\b(contact info|message|connect|followers|connections)\b/i.test(text)) {
+            return "";
+        }
+
+        return text;
+    }
+
     try {
-        const name = cleanText(
-            await page.locator(SELECTORS.name).first().textContent({
-                timeout: 5000
-            })
-        );
+        const selectors = [
+            ".pv-text-details__left-panel h1",
+            "main h1.text-heading-xlarge",
+            "main h1"
+        ];
+
+        for (const selector of selectors) {
+            const locator = page.locator(selector).first();
+
+            if (!(await locator.count())) {
+                continue;
+            }
+
+            const name = cleanName(await locator.innerText({
+                timeout: 3000
+            }));
+
+            if (name) {
+                return name;
+            }
+        }
+    } catch (err) {}
+
+    for (const line of lines.slice(0, 8)) {
+        const name = cleanName(line);
 
         if (name) {
             return name;
         }
+    }
+
+    return "";
+}
+try {
+
+  
+
+} catch (err) {}
+async function extractHeadline(page, lines, name) {
+    function cleanHeadline(value) {
+        const headline = cleanText(value);
+
+        if (!headline || headline.length > 260) {
+            return "";
+        }
+
+        if (looksLikeLocation(headline)) {
+            return "";
+        }
+
+        if (/\b(contact info|followers|connections|message|connect|highlights)\b/i.test(headline)) {
+            return "";
+        }
+
+        return headline;
+    }
+
+    try {
+        const selectors = [
+            ".pv-text-details__left-panel div.text-body-medium.break-words",
+            ".pv-text-details__left-panel div.text-body-medium",
+            "main section:first-of-type div.text-body-medium.break-words"
+        ];
+
+        for (const selector of selectors) {
+            const locator = page.locator(selector).first();
+
+            if (!(await locator.count())) {
+                continue;
+            }
+
+            const headline = cleanHeadline(await locator.innerText({
+                timeout: 3000
+            }));
+
+            if (headline) {
+                return headline;
+            }
+        }
     } catch (err) {}
 
-    return lines[0] || "";
-}
+    const directHeadline = cleanHeadline(
+        await getFirstLocatorText(page, SELECTORS.headline)
+    );
 
-async function extractHeadline(page, lines, name) {
-    const headline = await getFirstLocatorText(page, SELECTORS.headline);
-
-    if (headline) {
-        return headline;
+    if (directHeadline) {
+        return directHeadline;
     }
 
     const nameIndex = lines.findIndex(line => name && line.includes(name));
 
     if (nameIndex >= 0 && lines[nameIndex + 1]) {
-        return lines[nameIndex + 1];
+        return cleanHeadline(lines[nameIndex + 1]);
     }
 
     return "";
 }
 
 async function extractCompany(page, lines, headline) {
-    const companyFromHeadline = extractCompanyFromHeadline(headline);
+    function cleanCompany(value) {
+        let company = cleanText(value)
+            .replace(/\s+logo$/i, "")
+            .replace(/\s+company page$/i, "")
+            .trim();
 
-    if (companyFromHeadline) {
-        return companyFromHeadline;
+        if (company.includes(" \u00b7 ")) {
+            company = company.split(" \u00b7 ")[0];
+        }
+
+        if (company.includes(" \u00b7 ")) {
+            company = company.split(" \u00b7 ")[0];
+        }
+
+        if (company.includes(" \u00c2\u00b7 ")) {
+            company = company.split(" \u00c2\u00b7 ")[0];
+        }
+
+        if (!company || company.length > 120) {
+            return "";
+        }
+
+        if (/\b(experience|education|skills|connections|followers|contact info|present|yrs?|mos?)\b/i.test(company)) {
+            return "";
+        }
+
+        return company;
     }
 
-    const headerCompany = await getFirstLocatorText(
-        page,
-        SELECTORS.companyHeader
-    );
-
-    if (headerCompany) {
-        return headerCompany;
-    }
-async function extractCollege(page, lines) {
-
-    const education = getLineAfter(lines, "Education");
-
-    if (education) {
-        return education;
-    }
-
-    return "";
-}
     try {
         const experienceSection = page
             .locator("section")
@@ -224,43 +350,211 @@ async function extractCollege(page, lines) {
             .first();
 
         if (await experienceSection.count()) {
-            const experienceLines = toLines(
-                await experienceSection.textContent({
-                    timeout: 5000
-                })
-            );
+            const firstExperience = experienceSection.locator("li").first();
 
-            const companyLine = experienceLines.find(line =>
-                / · /.test(line) ||
-                /\b(full-time|part-time|self-employed|contract|freelance)\b/i.test(line)
-            );
+            if (await firstExperience.count()) {
+                const candidates = await firstExperience
+                    .locator("span[aria-hidden='true']")
+                    .evaluateAll(elements => elements
+                        .map(element => element.innerText || element.textContent || "")
+                        .map(text => text.replace(/\s+/g, " ").trim())
+                        .filter(Boolean));
 
-            if (companyLine) {
-                return cleanText(companyLine.split(" · ")[0]);
+                const companyLine = candidates.find(candidate =>
+                    / \u00b7 | \u00c2\u00b7 /.test(candidate) ||
+                    /\b(full-time|part-time|self-employed|contract|freelance|internship)\b/i.test(candidate)
+                );
+
+                const companyFromLine = cleanCompany(companyLine || "");
+
+                if (companyFromLine) {
+                    return companyFromLine;
+                }
+
+                for (const candidate of candidates.slice(1, 5)) {
+                    const company = cleanCompany(candidate);
+
+                    if (company) {
+                        return company;
+                    }
+                }
             }
         }
     } catch (err) {}
 
-    const experienceFallback = getLineAfter(lines, "Experience");
+    try {
+        const selectors = [
+            ".pv-text-details__right-panel a[href*='/company/'] span[aria-hidden='true']",
+            ".pv-text-details__right-panel a[href*='/company/']",
+            "main section:first-of-type a[href*='/company/'] span[aria-hidden='true']",
+            "main section:first-of-type a[href*='/company/']"
+        ];
 
-    if (experienceFallback) {
-        return experienceFallback;
+        for (const selector of selectors) {
+            const locator = page.locator(selector).first();
+
+            if (!(await locator.count())) {
+                continue;
+            }
+
+            const company = cleanCompany(await locator.innerText({
+                timeout: 3000
+            }));
+
+            if (company) {
+                return company;
+            }
+        }
+    } catch (err) {}
+
+    const companyFromHeadline = cleanCompany(
+        extractCompanyFromHeadline(headline)
+    );
+
+    if (companyFromHeadline) {
+        return companyFromHeadline;
+    }
+
+    return "";
+}
+
+async function extractCollege(page, lines) {
+    function cleanCollege(value) {
+        const college = cleanText(value);
+
+        if (!college || college.length > 160) {
+            return "";
+        }
+
+        if (/\b(education|degree|grade|activities|from|to|present|yrs?|mos?|bachelor|master)\b/i.test(college)) {
+            return "";
+        }
+
+        return college;
+    }
+
+    try {
+        const educationSection = page
+            .locator("section")
+            .filter({
+                has: page.locator("#education")
+            })
+            .first();
+
+        if (await educationSection.count()) {
+            const firstEducation = educationSection.locator("li").first();
+
+            if (await firstEducation.count()) {
+                const candidates = await firstEducation
+                    .locator("span[aria-hidden='true']")
+                    .evaluateAll(elements => elements
+                        .map(element => element.innerText || element.textContent || "")
+                        .map(text => text.replace(/\s+/g, " ").trim())
+                        .filter(Boolean));
+
+                for (const candidate of candidates) {
+                    const college = cleanCollege(candidate);
+
+                    if (college) {
+                        return college;
+                    }
+                }
+            }
+        }
+    } catch (err) {}
+
+    const education = cleanCollege(getLineAfter(lines, "Education"));
+
+    if (education) {
+        return education;
     }
 
     return "";
 }
 
 async function extractLocation(page, lines) {
-    const location = await getFirstLocatorText(page, SELECTORS.location);
+    function cleanLocation(value) {
+        const location = cleanText(value)
+            .replace(/\s*\u00b7\s*Contact info.*$/i, "")
+            .replace(/\s*\u00b7\s*Contact info.*$/i, "")
+            .trim();
 
-    if (location && looksLikeLocation(location)) {
+        if (!location || location.length > 120) {
+            return "";
+        }
+
+        if (!looksLikeLocation(location)) {
+            return "";
+        }
+
+        if (/\b(message|connect|followers|connections|contact info|headline)\b/i.test(location)) {
+            return "";
+        }
+
         return location;
     }
 
-    return lines.find(looksLikeLocation) || location || "";
+    try {
+        const selectors = [
+            ".pv-text-details__left-panel span.text-body-small.inline.t-black--light.break-words",
+            ".pv-text-details__left-panel span.text-body-small.inline",
+            ".pv-text-details__left-panel span.text-body-small.t-black--light",
+            "main section:first-of-type span.text-body-small.inline"
+        ];
+
+        for (const selector of selectors) {
+            const locator = page.locator(selector).first();
+
+            if (!(await locator.count())) {
+                continue;
+            }
+
+            const location = cleanLocation(await locator.innerText({
+                timeout: 3000
+            }));
+
+            if (location) {
+                return location;
+            }
+        }
+    } catch (err) {}
+
+    const location = cleanLocation(
+        await getFirstLocatorText(page, SELECTORS.location)
+    );
+
+    if (location) {
+        return location;
+    }
+
+    for (const line of lines.slice(0, 12)) {
+        const fallbackLocation = cleanLocation(line);
+
+        if (fallbackLocation) {
+            return fallbackLocation;
+        }
+    }
+
+    return "";
 }
 
 async function extractAbout(page, lines) {
+    function cleanAbout(value) {
+        const about = cleanText(value)
+            .replace(/^about\s*/i, "")
+            .trim();
+
+        if (!about || about.length > 5000) {
+            return "";
+        }
+
+        if (/\b(ad choices|linkedin corporation|more profiles for you|manage your account)\b/i.test(about)) {
+            return "";
+        }
+
+        return about;
+    }
+
     try {
         const aboutSection = page
             .locator("section")
@@ -270,13 +564,48 @@ async function extractAbout(page, lines) {
             .first();
 
         if (await aboutSection.count()) {
-            const aboutLines = toLines(
-                await aboutSection.textContent({
-                    timeout: 5000
-                })
-            ).filter(line => !/^about$/i.test(line));
+            const aboutTextLocator = aboutSection
+                .locator(".inline-show-more-text span[aria-hidden='true']")
+                .first();
 
-            const about = cleanText(aboutLines.join(" "));
+            if (await aboutTextLocator.count()) {
+                const about = cleanAbout(await aboutTextLocator.innerText({
+                    timeout: 3000
+                }));
+
+                if (about) {
+                    return about;
+                }
+            }
+
+            const sectionLines = toLines(await aboutSection.innerText({
+                timeout: 5000
+            }));
+            const stopLabels = new Set([
+                "activity",
+                "experience",
+                "education",
+                "skills",
+                "top skills",
+                "licenses & certifications",
+                "recommendations",
+                "interests"
+            ]);
+            const aboutLines = [];
+
+            for (const line of sectionLines) {
+                if (/^about$/i.test(line)) {
+                    continue;
+                }
+
+                if (stopLabels.has(line.toLowerCase())) {
+                    break;
+                }
+
+                aboutLines.push(line);
+            }
+
+            const about = cleanAbout(aboutLines.join(" "));
 
             if (about) {
                 return about;
@@ -307,10 +636,14 @@ async function extractAbout(page, lines) {
             break;
         }
 
+        if (line.length > 1000) {
+            break;
+        }
+
         aboutLines.push(line);
     }
 
-    return cleanText(aboutLines.join(" "));
+    return cleanAbout(aboutLines.join(" "));
 }
 
 async function extractConnectionStatus(page) {
@@ -362,15 +695,24 @@ async function loadMutuals() {
         throw new Error("data/mutuals.json must contain an array of profile URLs.");
     }
 
-    const profileUrls = [...new Set(mutuals
-        .map(normalizeProfileUrl)
-        .filter(Boolean))];
+    const mutualProfiles = mutuals
+        .filter(profile =>
+            profile &&
+            profile.name &&
+            normalizeProfileUrl(profile.linkedin_url)
+        )
+        .map(profile => ({
+            name: profile.name.trim(),
+            linkedin_url: normalizeProfileUrl(profile.linkedin_url)
+        }));
 
-    if (!profileUrls.length) {
-        throw new Error("data/mutuals.json does not contain any valid LinkedIn profile URLs.");
+    if (!mutualProfiles.length) {
+        throw new Error(
+            "data/mutuals.json does not contain any valid profiles."
+        );
     }
 
-    return profileUrls;
+    return mutualProfiles;
 }
 
 async function loadExistingResults() {
@@ -421,65 +763,476 @@ async function getMainLines(page) {
     }
 }
 
-async function scrapeProfile(page, profileUrl) {
-    page.setDefaultTimeout(TIMEOUTS.profileMs);
-    page.setDefaultNavigationTimeout(TIMEOUTS.pageLoadMs);
+async function moveMouseToLocator(page, locator, label) {
+    await locator.waitFor({
+        state: "visible",
+        timeout: TIMEOUTS.contentMs
+    });
 
-    await page.goto(profileUrl, {
+    const box = await locator.boundingBox();
+
+    if (!box) {
+        throw new Error(label + " position could not be determined.");
+    }
+
+    await page.mouse.move(
+        box.x + box.width * (0.35 + Math.random() * 0.3),
+        box.y + box.height * (0.35 + Math.random() * 0.3),
+        {
+            steps: randomInt(18, 42)
+        }
+    );
+
+    await pause(page, 180, 650);
+}
+
+async function naturalClick(page, locator, label) {
+    await moveMouseToLocator(page, locator, label);
+    await pause(page, 180, 500);
+
+    await locator.click({
+        delay: randomInt(60, 180),
+        timeout: TIMEOUTS.contentMs
+    });
+}
+
+async function typeLikeHuman(page, text) {
+    for (const char of text) {
+        await page.keyboard.type(char, {
+            delay: randomInt(60, 155)
+        });
+
+        if (Math.random() < 0.14) {
+            await pause(page, 180, 520);
+        }
+    }
+}
+
+async function openLinkedInHome(page) {
+    console.log("Opening LinkedIn Home...");
+
+    await page.goto(LINKEDIN_HOME_URL, {
         waitUntil: "domcontentloaded",
         timeout: TIMEOUTS.pageLoadMs
     });
 
     await page.waitForLoadState("networkidle", {
-        timeout: TIMEOUTS.contentMs
+        timeout: 5000
     }).catch(() => {});
 
-    await page.waitForTimeout(TIMEOUTS.afterLoadMs);
+    if (isUnexpectedLinkedInUrl(page.url())) {
+        throw new Error("LinkedIn redirected to a login, checkpoint, or unavailable page.");
+    }
+
+    await page.locator(SELECTORS.searchInput).first().waitFor({
+        state: "visible",
+        timeout: TIMEOUTS.searchBoxMs
+    });
+
+    await pause(page, 1200, 3200);
+    console.log("LinkedIn Home ready.");
+}
+
+async function searchProfile(page, mutualProfile) {
+    const searchBox = page.locator(SELECTORS.searchInput).first();
+
+    if (!(await searchBox.isVisible({ timeout: 3000 }).catch(() => false))) {
+        console.log("Search box not visible. Recovering via LinkedIn Home.");
+        await openLinkedInHome(page);
+    }
+
+    await naturalClick(page, searchBox, "Search box");
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+    await pause(page, 80, 220);
+    await page.keyboard.press("Backspace");
+    await pause(page, 260, 620);
+
+    console.log("Typing:", mutualProfile.name);
+    await typeLikeHuman(page, mutualProfile.name);
+
+    const suggestions = page.locator(SELECTORS.searchSuggestions);
+
+    await suggestions.first().waitFor({
+        state: "visible",
+        timeout: TIMEOUTS.suggestionsMs
+    });
+
+    await pause(page, 450, 1100);
+    return suggestions;
+}
+
+async function openVerifiedProfile(page, suggestion, expectedUrl) {
+    const href = await suggestion.getAttribute("href");
+    const suggestionUrl = normalizeProfileUrl(href || "");
+
+    if (suggestionUrl !== expectedUrl) {
+        throw new Error("Search suggestion URL did not match the expected profile.");
+    }
+
+    console.log("Correct profile found.");
+
+    await naturalClick(page, suggestion, "Suggestion");
+    console.log("Profile clicked.");
+
+    await page.waitForURL(url => {
+        return normalizeProfileUrl(url.href) === expectedUrl ||
+            isUnexpectedLinkedInUrl(url.href);
+    }, {
+        timeout: TIMEOUTS.navigationMs
+    });
+
+    await page.waitForLoadState("domcontentloaded", {
+        timeout: TIMEOUTS.pageLoadMs
+    });
+
+    await page.waitForLoadState("networkidle", {
+        timeout: 7000
+    }).catch(() => {});
+
+    if (isUnexpectedLinkedInUrl(page.url())) {
+        throw new Error("LinkedIn redirected unexpectedly after opening the profile.");
+    }
+
+    const openedUrl = normalizeProfileUrl(page.url());
+
+    if (openedUrl !== expectedUrl) {
+        throw new Error(
+            "Opened profile URL mismatch. Expected " +
+            expectedUrl +
+            " but opened " +
+            (openedUrl || page.url())
+        );
+    }
+
+    await page.locator(SELECTORS.main).first().waitFor({
+        state: "visible",
+        timeout: TIMEOUTS.contentMs
+    });
+
+    await pause(page, 1000, 2600);
+    console.log("Profile loaded.");
+}
+
+async function humanReadProfile(page) {
+    console.log("Reading profile...");
+
+    const duration = 8000;
+    const started = Date.now();
+    let downwardScrolls = 0;
+
+    function remainingReadMs() {
+        return duration - (Date.now() - started);
+    }
+
+    async function pauseWithinReadBudget(minMs, maxMs) {
+        const remaining = remainingReadMs();
+
+        if (remaining <= 0) {
+            return;
+        }
+
+        await page.waitForTimeout(
+            Math.min(randomInt(minMs, maxMs), remaining)
+        );
+    }
+
+    await pauseWithinReadBudget(800, 1800);
+
+    while (remainingReadMs() > 0) {
+        // After a few seconds, stop early if key lazy-loaded sections are visible.
+        if (Date.now() - started > 5000 && remainingReadMs() > 300) {
+            const loaded = await page.evaluate(() => {
+                const text = document.body.innerText.toLowerCase();
+
+                return (
+                    text.includes("experience") &&
+                    text.includes("education")
+                );
+            });
+
+            if (loaded) {
+                console.log("Important sections loaded. Finishing reading.");
+                break;
+            }
+        }
+
+        const viewport = page.viewportSize();
+
+        if (viewport) {
+            await page.mouse.move(
+                randomInt(120, Math.max(160, viewport.width - 160)),
+                randomInt(110, Math.max(150, viewport.height - 150)),
+                {
+                    steps: randomInt(14, 34)
+                }
+            );
+        }
+
+        const shouldScrollUp =
+            downwardScrolls >= 2 &&
+            Math.random() < 0.18 &&
+            remainingReadMs() > 1600;
+
+        const distance = shouldScrollUp ?
+            -randomInt(110, 320) :
+            randomInt(420, 920);
+
+        await page.mouse.wheel(0, distance);
+
+        if (distance > 0) {
+            downwardScrolls += 1;
+        }
+
+        await pauseWithinReadBudget(300, 850);
+
+        if (Math.random() < 0.28) {
+            await pauseWithinReadBudget(500, 1200);
+        }
+    }
+
+    console.log("Finished reading profile.");
+}
+
+async function waitBetweenProfiles(page) {
+const waitTime = randomInt(2500, 5000);
+    console.log("Waiting " + Math.round(waitTime / 1000) + " seconds...");
+    await pause(page, Math.floor(waitTime * 0.45), Math.floor(waitTime * 0.65));
+
+    if (Math.random() < 0.7) {
+        await page.mouse.wheel(0, -randomInt(120, 360));
+    }
+
+    await pause(page, Math.floor(waitTime * 0.25), Math.floor(waitTime * 0.45));
+}
+
+async function scrapeProfile(page) {
+    page.setDefaultTimeout(TIMEOUTS.profileMs);
+    page.setDefaultNavigationTimeout(TIMEOUTS.pageLoadMs);
+
+    if (isUnexpectedLinkedInUrl(page.url())) {
+        throw new Error("Profile unavailable or LinkedIn session needs attention.");
+    }
+
+    await page.waitForLoadState("domcontentloaded", {
+    timeout: TIMEOUTS.contentMs
+});
+
+await page.waitForLoadState("networkidle", {
+    timeout: 3000
+}).catch(() => {});
+
+// Small pause to let LinkedIn finish rendering
+await pause(page, 300, 900);
+    await humanReadProfile(page);
 
     const currentUrl = page.url();
 
-    if (
-        currentUrl.includes("/login") ||
-        currentUrl.includes("/checkpoint") ||
-        currentUrl.includes("/404")
-    ) {
+    if (isUnexpectedLinkedInUrl(currentUrl)) {
         throw new Error("Profile unavailable or LinkedIn session needs attention.");
     }
 
     const lines = await getMainLines(page);
+    console.log("First 20 lines:");
+console.log(lines.slice(0, 20));
     const name = await extractName(page, lines);
+await pause(page, 80, 180);
     const headline = await extractHeadline(page, lines, name);
+    console.log("Headline:", headline);
+await pause(page, 80, 180);
     const company = await extractCompany(page, lines, headline);
+await pause(page, 80, 180);
     const college = await extractCollege(page, lines);
+await pause(page, 80, 180);
     const location = await extractLocation(page, lines);
+await pause(page, 80, 180);
     const about = await extractAbout(page, lines);
+await pause(page, 80, 180);
     const connectionStatus = await extractConnectionStatus(page);
 
-   return {
-    linkedin_url: profileUrl,
-    name,
-    headline,
-    company,
-    college,
-    location,
-    about,
-    connection_status: connectionStatus
-};
+    return {
+        linkedin_url: normalizeProfileUrl(page.url()),
+        name,
+        headline,
+        company,
+        college,
+        location,
+        about,
+        connection_status: connectionStatus
+    };
 }
 
-function logProgress(index, total, profileUrl) {
+async function findAndOpenProfile(page, mutualProfile) {
+    const expectedUrl = normalizeProfileUrl(mutualProfile.linkedin_url);
+    let lastError;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const suggestions = await searchProfile(page, mutualProfile);
+            const count = await suggestions.count();
+
+            console.log("Suggestions found:", count);
+
+            for (let i = 0; i < count; i++) {
+                const suggestion = suggestions.nth(i);
+                const href = await suggestion.getAttribute("href");
+                const suggestionUrl = normalizeProfileUrl(href || "");
+
+                if (suggestionUrl === expectedUrl) {
+                    await openVerifiedProfile(page, suggestion, expectedUrl);
+                    return;
+                }
+            }
+
+            throw new Error(
+                'Could not find "' +
+                mutualProfile.name +
+                '" in search suggestions.'
+            );
+        } catch (err) {
+            lastError = err;
+
+            if (attempt >= 2) {
+                break;
+            }
+
+            console.log("Search attempt failed. Retrying from LinkedIn Home:", err.message);
+            await openLinkedInHome(page);
+            await pause(page, 1200, 2600);
+        }
+    }
+
+    throw lastError;
+}
+
+function profileMatchesTarget(profile, target) {
+
+    const profileCompany = normalizeCompanyName(
+        profile.company
+    );
+
+    const targetCompany = normalizeCompanyName(
+        target.company
+    );
+
+    const sameCompany =
+        profileCompany &&
+        targetCompany &&
+        (
+            profileCompany.includes(targetCompany) ||
+            targetCompany.includes(profileCompany)
+        );
+
+    const profileCollege = cleanText(
+        profile.college
+    ).toLowerCase();
+
+    const targetCollege = cleanText(
+        target.college
+    ).toLowerCase();
+
+    const sameCollege =
+        profileCollege &&
+        targetCollege &&
+        (
+            profileCollege.includes(targetCollege) ||
+            targetCollege.includes(profileCollege)
+        );
+
+    return sameCompany || sameCollege;
+}
+
+async function browseHomeFeed(page, minDurationMs, maxDurationMs, label) {
+    await openLinkedInHome(page);
+    console.log(label);
+
+    const duration = randomInt(minDurationMs, maxDurationMs);
+    const started = Date.now();
+
+while (Date.now() - started < duration) {
+
+    // If we've been reading for at least 5 seconds,
+    // check whether the important profile sections are loaded.
+    if (Date.now() - started > 5000) {
+
+        const loaded = await page.evaluate(() => {
+
+            const text = document.body.innerText.toLowerCase();
+
+            return (
+                text.includes("experience") &&
+                text.includes("education")
+            );
+
+        });
+
+        if (loaded) {
+
+            console.log(
+                "Important sections loaded. Finishing reading."
+            );
+
+            break;
+        }
+    }        const viewport = page.viewportSize();
+
+        if (viewport) {
+            await page.mouse.move(
+                randomInt(120, Math.max(160, viewport.width - 180)),
+                randomInt(130, Math.max(160, viewport.height - 160)),
+                {
+                    steps: randomInt(10, 28)
+                }
+            );
+        }
+
+        await page.mouse.wheel(0, randomInt(240, 760));
+        await pause(page, 650, 2100);
+
+        if (Math.random() < 0.18) {
+            await page.mouse.wheel(0, -randomInt(100, 340));
+            await pause(page, 500, 1500);
+        }
+
+        if (Math.random() < 0.2) {
+            await pause(page, 900, 2600);
+        }
+    }
+
+    await pause(page, 1600, 3600);
+}
+
+async function browseHomeFeedBeforeClose(page) {
+    await browseHomeFeed(
+        page,
+        15000,
+        20000,
+        "Browsing home feed before closing..."
+    );
+}
+
+async function takeSessionBreak(page) {
+    await browseHomeFeed(
+        page,
+        45000,
+        90000,
+        "Taking a natural home-feed break..."
+    );
+}
+
+function logProgress(index, total, profile) {
     console.log("");
     console.log("--------------------------------");
     console.log("[" + index + " / " + total + "]");
     console.log("Opening:");
-    console.log(profileUrl);
+    console.log(profile.name);
+    console.log(profile.linkedin_url);
     console.log("--------------------------------");
 }
 
 function logExtractedProfile(profile) {
-    console.log((profile.name ? "✓" : "-") + " Name");
-    console.log((profile.company ? "✓" : "-") + " Company");
-    console.log((profile.location ? "✓" : "-") + " Location");
+    console.log((profile.name ? "OK" : "--") + " Name");
+    console.log((profile.company ? "OK" : "--") + " Company");
+    console.log((profile.location ? "OK" : "--") + " Location");
 }
 
 function logSummary(startedAt, scrapedCount, failedCount) {
@@ -498,18 +1251,23 @@ function logSummary(startedAt, scrapedCount, failedCount) {
 
 async function main() {
     const startedAt = Date.now();
-   let browser;
-let session;
-let results = [];
-let failedCount = 0;
-let scrapedCount = 0;
+    let browser;
+    let session;
+    let results = [];
+    let failedCount = 0;
+    let scrapedCount = 0;
+    let processedSinceBreak = 0;
+    let nextSessionBreak = randomInt(15, 25);
+
     try {
-        const profileUrls = await loadMutuals();
+        const mutualProfiles = await loadMutuals();
         const target = await readJsonFile(
-    TARGET_PATH,
-    "data/target.json not found."
-);
-results = await loadExistingResults();
+            TARGET_PATH,
+            "data/target.json not found."
+        );
+
+        results = await loadExistingResults();
+
         const scrapedUrls = new Set(
             results.map(result => normalizeProfileUrl(result.linkedin_url))
         );
@@ -517,82 +1275,107 @@ results = await loadExistingResults();
         console.log("");
         console.log("Scraping LinkedIn profile details");
         console.log("=================================");
-        console.log("Profiles:", profileUrls.length);
+        console.log("Profiles:", mutualProfiles.length);
         console.log("Already scraped:", scrapedUrls.size);
 
         await saveResults(results);
 
-        const session = await startBrowser();
+        session = await startBrowser();
         browser = session.browser;
-process.on("SIGINT", async () => {
 
-    console.log("\nSaving progress...");
+        process.on("SIGINT", async () => {
+            console.log("\nSaving progress...");
+            await saveResults(results);
 
-    await saveResults(results);
+            if (browser) {
+                await browser.close().catch(() => {});
+            }
 
-    if (browser) {
-        await browser.close().catch(() => {});
-    }
+            console.log("Progress saved.");
+            process.exit(0);
+        });
 
-    console.log("Progress saved.");
-    process.exit(0);
-});
+        await openLinkedInHome(session.page);
 
-
-        for (const [index, profileUrl] of profileUrls.entries()) {
-            const normalizedUrl = normalizeProfileUrl(profileUrl);
+        for (const [index, mutualProfile] of mutualProfiles.entries()) {
+            const normalizedUrl = normalizeProfileUrl(mutualProfile.linkedin_url);
 
             if (scrapedUrls.has(normalizedUrl)) {
-                console.log("");
-                console.log("[" + (index + 1) + " / " + profileUrls.length + "] Skipping already scraped profile");
-                console.log(profileUrl);
+                console.log("Skipping already scraped:", mutualProfile.name);
                 continue;
             }
 
-            logProgress(index + 1, profileUrls.length, profileUrl);
+            logProgress(index + 1, mutualProfiles.length, mutualProfile);
 
             try {
-                const profile = await scrapeProfile(session.page, profileUrl);
-  const sameCompany =
-    profile.company &&
-    target.company &&
-    profile.company
-        .toLowerCase()
-        .includes(target.company.toLowerCase());
+                await findAndOpenProfile(session.page, mutualProfile);
 
-const sameCollege =
-    profile.college &&
-    target.college &&
-    profile.college
-        .toLowerCase()
-        .includes(target.college.toLowerCase());
+                const profile = await scrapeProfile(session.page);
 
-const matched = sameCompany || sameCollege;
+                if (normalizeProfileUrl(profile.linkedin_url) !== normalizedUrl) {
+                    throw new Error("Scraped profile URL did not match the requested profile.");
+                }
 
-if (!matched) {
-    console.log("✗ No company or college match. Skipping...");
-    continue;
-}
-results.push(profile);
+                processedSinceBreak += 1;
+
+                const shouldTakeSessionBreak =
+                    processedSinceBreak >= nextSessionBreak &&
+                    index < mutualProfiles.length - 1;
+
+                results.push(profile);
                 scrapedUrls.add(normalizedUrl);
                 scrapedCount += 1;
 
                 logExtractedProfile(profile);
-
                 await saveResults(results);
-                console.log("✓ Saved");
+                console.log("Saved to data/mutual-details.json");
+console.log("------------");
+console.log("Company:", profile.company);
+console.log("Target Company:", target.company);
+console.log("College:", profile.college);
+console.log("Target College:", target.college);
+console.log("------------");
+
+                if (!profileMatchesTarget(profile, target)) {
+                    console.log("No company or college match.");
+
+                    if (shouldTakeSessionBreak) {
+                        await takeSessionBreak(session.page);
+                        processedSinceBreak = 0;
+                        nextSessionBreak = randomInt(15, 25);
+                    } else {
+                        await waitBetweenProfiles(session.page);
+                    }
+
+                    continue;
+                }
+
+                if (shouldTakeSessionBreak) {
+                    await takeSessionBreak(session.page);
+                    processedSinceBreak = 0;
+                    nextSessionBreak = randomInt(15, 25);
+                } else {
+                    await waitBetweenProfiles(session.page);
+                }
             } catch (err) {
                 failedCount += 1;
                 console.error("Profile failed:", err.message);
 
-                await session.page.goto("about:blank", {
-                    waitUntil: "domcontentloaded",
-                    timeout: 10000
-                }).catch(() => {});
+                try {
+                    await openLinkedInHome(session.page);
+                } catch (recoveryErr) {
+                    console.error("Recovery failed:", recoveryErr.message);
+                }
             }
         }
 
-        logSummary(startedAt, results.length, failedCount);
+        if (session && session.page) {
+            await browseHomeFeedBeforeClose(session.page).catch(err => {
+                console.error("Final feed browse failed:", err.message);
+            });
+        }
+
+        logSummary(startedAt, scrapedCount, failedCount);
     } catch (err) {
         console.error("");
         console.error("Scrape profile details failed");
@@ -615,6 +1398,7 @@ module.exports = {
     extractName,
     extractHeadline,
     extractCompany,
+    extractCollege,
     extractLocation,
     extractAbout,
     extractConnectionStatus,
@@ -622,5 +1406,11 @@ module.exports = {
     saveResults,
     loadMutuals,
     loadExistingResults,
+    openLinkedInHome,
+    searchProfile,
+    openVerifiedProfile,
+    humanReadProfile,
+    waitBetweenProfiles,
+    browseHomeFeedBeforeClose,
     main
 };
