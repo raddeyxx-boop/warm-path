@@ -1,7 +1,26 @@
 const fs = require("fs/promises");
 const path = require("path");
 const startBrowser = require("../services/browser");
-
+const {
+    extractHeader,
+    extractName,
+    extractHeadline,
+    extractCompany,
+    extractLocation
+} = require("./extractors/header");
+const {
+    extractAbout
+} = require("./extractors/about");
+const {
+    extractExperience: extractExperienceSection,
+    hasExperienceSection
+} = require("./extractors/experience");
+const {
+    extractEducation
+} = require("./extractors/education");
+const {
+    extractSkills
+} = require("./extractors/skills");
 const LINKEDIN_HOME_URL = "https://www.linkedin.com/feed/";
 const MUTUALS_PATH = path.resolve(__dirname, "..", "data", "mutuals.json");
 const OUTPUT_PATH = path.resolve(__dirname, "..", "data", "mutual-details.json");
@@ -194,133 +213,8 @@ function looksLikeLocation(value) {
     );
 }
 
-async function extractName(page, lines) {
-    try {
-        const name = cleanText(
-            await page.locator(SELECTORS.name).first().textContent({
-                timeout: 5000
-            })
-        );
 
-        if (name) {
-            return name;
-        }
-    } catch (err) {}
 
-    return lines[0] || "";
-}
-try {
-
-  
-
-} catch (err) {}
-async function extractHeadline(page, lines, name) {
-
-    // Strategy 1: Read the text immediately below the H1
-    try {
-
-        const heading = page.locator("h1").first();
-
-        const container = heading.locator("xpath=..");
-
-        const text = cleanText(
-            await container.textContent({
-                timeout: 3000
-            })
-        );
-
-        if (text) {
-
-            const withoutName = text.replace(name, "").trim();
-
-            if (
-                withoutName &&
-                !looksLikeLocation(withoutName) &&
-                withoutName.length < 180
-            ) {
-                return withoutName;
-            }
-        }
-
-    } catch (err) {}
-
-    // Strategy 2: Existing selectors
-    const headline = await getFirstLocatorText(
-        page,
-        SELECTORS.headline
-    );
-
-    if (headline) {
-        return headline;
-    }
-
-    // Strategy 3: Fallback from parsed lines
-    const nameIndex = lines.findIndex(
-        line => cleanText(line) === cleanText(name)
-    );
-
-    if (nameIndex >= 0 && lines[nameIndex + 1]) {
-
-        const next = cleanText(lines[nameIndex + 1]);
-
-        if (!looksLikeLocation(next)) {
-            return next;
-        }
-    }
-
-    return "";
-}
-
-async function extractCompany(page, lines, headline) {
-    const companyFromHeadline = extractCompanyFromHeadline(headline);
-
-    if (companyFromHeadline) {
-        return companyFromHeadline;
-    }
-
-    const headerCompany = await getFirstLocatorText(
-        page,
-        SELECTORS.companyHeader
-    );
-
-    if (headerCompany) {
-        return headerCompany;
-    }
-
-    try {
-        const experienceSection = page
-            .locator("section")
-            .filter({
-                has: page.locator("#experience")
-            })
-            .first();
-
-        if (await experienceSection.count()) {
-            const experienceLines = toLines(
-                await experienceSection.textContent({
-                    timeout: 5000
-                })
-            );
-
-            const companyLine = experienceLines.find(line =>
-                / \u00b7 | \u00c2\u00b7 /.test(line) ||
-                /\b(full-time|part-time|self-employed|contract|freelance)\b/i.test(line)
-            );
-
-            if (companyLine) {
-                return cleanText(companyLine.split(/ \u00b7 | \u00c2\u00b7 /)[0]);
-            }
-        }
-    } catch (err) {}
-
-    const experienceFallback = getLineAfter(lines, "Experience");
-
-    if (experienceFallback) {
-        return experienceFallback;
-    }
-
-    return "";
-}
 
 async function extractCollege(page, lines) {
     const education = getLineAfter(lines, "Education");
@@ -332,68 +226,6 @@ async function extractCollege(page, lines) {
     return "";
 }
 
-async function extractLocation(page, lines) {
-    const location = await getFirstLocatorText(page, SELECTORS.location);
-
-    if (location && looksLikeLocation(location)) {
-        return location;
-    }
-
-    return lines.find(looksLikeLocation) || location || "";
-}
-
-async function extractAbout(page, lines) {
-    try {
-        const aboutSection = page
-            .locator("section")
-            .filter({
-                has: page.locator("#about")
-            })
-            .first();
-
-        if (await aboutSection.count()) {
-            const aboutLines = toLines(
-                await aboutSection.textContent({
-                    timeout: 5000
-                })
-            ).filter(line => !/^about$/i.test(line));
-
-            const about = cleanText(aboutLines.join(" "));
-
-            if (about) {
-                return about;
-            }
-        }
-    } catch (err) {}
-
-    const aboutIndex = lines.findIndex(line => /^about$/i.test(line));
-
-    if (aboutIndex < 0) {
-        return "";
-    }
-
-    const stopLabels = new Set([
-        "activity",
-        "experience",
-        "education",
-        "skills",
-        "licenses & certifications",
-        "recommendations",
-        "interests"
-    ]);
-
-    const aboutLines = [];
-
-    for (const line of lines.slice(aboutIndex + 1)) {
-        if (stopLabels.has(line.toLowerCase())) {
-            break;
-        }
-
-        aboutLines.push(line);
-    }
-
-    return cleanText(aboutLines.join(" "));
-}
 
 async function extractConnectionStatus(page) {
     const statusChecks = [
@@ -433,7 +265,6 @@ async function extractConnectionStatus(page) {
 
     return "Unknown";
 }
-
 async function loadMutuals() {
     const mutuals = await readJsonFile(
         MUTUALS_PATH,
@@ -662,15 +493,115 @@ async function openVerifiedProfile(page, suggestion, expectedUrl) {
     console.log("Profile loaded.");
 }
 
+async function getProfileRenderState(page) {
+    return page.evaluate(() => {
+        const clean = value => (value || "").replace(/\s+/g, " ").trim();
+        const main = document.querySelector("main");
+
+if (!main) {
+   return {
+    scrollY: window.scrollY,
+
+    documentHeight: document.documentElement.scrollHeight,
+
+    bodyHeight: document.body.scrollHeight,
+
+    mainHeight: main.scrollHeight,
+
+    mainClientHeight: main.clientHeight,
+
+    viewportHeight: window.innerHeight,
+
+    atBottom:
+        window.scrollY + window.innerHeight >=
+        document.documentElement.scrollHeight - 120
+};
+}
+
+const headings = [
+    ...main.querySelectorAll(`
+        section h1,
+        section h2,
+        section h3,
+        section [role="heading"],
+        div[aria-level],
+        span[role="heading"]
+    `)
+];
+        const headingTexts = headings.map(heading => clean(heading.innerText));
+        const hasSection = pattern => headingTexts.some(text => pattern.test(text));
+     const footers = [...document.querySelectorAll("footer")];
+
+const footerVisible = footers.some(footer => {
+    const box = footer.getBoundingClientRect();
+
+    return (
+        box.top < window.innerHeight &&
+        box.bottom > 0 &&
+        box.height > 100
+    );
+});
+        const interestsHeading = headings.find(heading =>
+            /^Interests\b/i.test(clean(heading.innerText))
+        );
+        const interestsSection = interestsHeading?.closest("section");
+        const interestsText = clean(interestsSection?.innerText || "");
+        const interestsReached = !!interestsHeading &&
+            /(Companies|Groups|Newsletters|Schools)/i.test(interestsText);
+
+        return {
+            scrollY: window.scrollY,
+            scrollHeight: document.documentElement.scrollHeight,
+            viewportHeight: window.innerHeight,
+            atBottom: window.scrollY + window.innerHeight >=
+                document.documentElement.scrollHeight - 120,
+            footerVisible,
+            interestsReached,
+            hasAbout: hasSection(/^About$/i),
+            hasExperience: hasSection(/^Experience$/i),
+            hasEducation: hasSection(/^Education$/i),
+            hasSkills: hasSection(/^Skills(?:\s+\(\d+\))?$/i)
+        };
+    }).catch(() => ({
+        scrollY: 0,
+        scrollHeight: 0,
+        viewportHeight: 0,
+        atBottom: false,
+        footerVisible: false,
+        interestsReached: false,
+        hasAbout: false,
+        hasExperience: false,
+        hasEducation: false,
+        hasSkills: false
+    }));
+}
+
+// LinkedIn profile pages are React-rendered and inject lower sections lazily.
+// This function reports whether the DOM has reached the real profile end, not
+// just whether the browser is near the current scrollHeight.
 async function humanReadProfile(page) {
     console.log("Reading profile...");
 
-    const duration = 8000;
+    const minimumReadMs = 8000;
+    const maximumReadMs = 20000;
     const started = Date.now();
     let downwardScrolls = 0;
+    let stableEndCount = 0;
+    let previousHeight = 0;
+    const seen = {
+    about: false,
+    experience: false,
+    education: false,
+    skills: false,
+    interests: false
+};
+
+    function elapsedReadMs() {
+        return Date.now() - started;
+    }
 
     function remainingReadMs() {
-        return duration - (Date.now() - started);
+        return Math.max(0, maximumReadMs - elapsedReadMs());
     }
 
     async function pauseWithinReadBudget(minMs, maxMs) {
@@ -680,32 +611,13 @@ async function humanReadProfile(page) {
             return;
         }
 
-        await page.waitForTimeout(
-            Math.min(randomInt(minMs, maxMs), remaining)
-        );
+        await page.waitForTimeout(Math.min(randomInt(minMs, maxMs), remaining));
     }
 
-    await pauseWithinReadBudget(800, 1800);
+    await pauseWithinReadBudget(300, 500);
 
-    while (remainingReadMs() > 0) {
-        // After a few seconds, stop early if key lazy-loaded sections are visible.
-        if (Date.now() - started > 5000 && remainingReadMs() > 300) {
-            const loaded = await page.evaluate(() => {
-                const text = document.body.innerText.toLowerCase();
-
-                return (
-                    text.includes("experience") &&
-                    text.includes("education")
-                );
-            });
-
-            if (loaded) {
-                console.log("Important sections loaded. Finishing reading.");
-                break;
-            }
-        }
-
-        const viewport = page.viewportSize();
+while (true) {
+            const viewport = page.viewportSize();
 
         if (viewport) {
             await page.mouse.move(
@@ -719,27 +631,208 @@ async function humanReadProfile(page) {
 
         const shouldScrollUp =
             downwardScrolls >= 2 &&
-            Math.random() < 0.18 &&
-            remainingReadMs() > 1600;
+            Math.random() < 0.12 &&
+            remainingReadMs() > 2600;
+      const distance = shouldScrollUp
+    ? -randomInt(60, 180)
+    : randomInt(320, 520);
 
-        const distance = shouldScrollUp ?
-            -randomInt(110, 320) :
-            randomInt(420, 920);
+       await page.mouse.wheel(0, distance);
 
-        await page.mouse.wheel(0, distance);
+if (distance > 0) {
+    downwardScrolls += 1;
+}
 
-        if (distance > 0) {
-            downwardScrolls += 1;
+// Give React time to mount lazy-loaded sections.
+const beforeHeight = await page.evaluate(
+    () => document.documentElement.scrollHeight
+);
+
+await page.mouse.wheel(0, distance);
+
+if (distance > 0) {
+    downwardScrolls += 1;
+}
+
+await page.waitForFunction(
+    height => document.documentElement.scrollHeight > height,
+    beforeHeight,
+    { timeout: 1500 }
+).catch(() => {});
+
+await pauseWithinReadBudget(450, 700);
+
+await pauseWithinReadBudget(450, 700);
+
+        if (shouldScrollUp) {
+            await pauseWithinReadBudget(250, 420);
         }
 
-        await pauseWithinReadBudget(300, 850);
+        let state = await getProfileRenderState(page);
+        seen.about ||= state.hasAbout;
+seen.experience ||= state.hasExperience;
+seen.education ||= state.hasEducation;
+seen.skills ||= state.hasSkills;
+seen.interests ||= state.interestsReached;
+        console.log({
+    scrollY: state.scrollY,
+    scrollHeight: state.scrollHeight,
+    atBottom: state.atBottom,
+    footerVisible: state.footerVisible,
+    interestsReached: state.interestsReached,
+    hasAbout: state.hasAbout,
+    hasExperience: state.hasExperience,
+    hasEducation: state.hasEducation,
+    hasSkills: state.hasSkills
+});
 
-        if (Math.random() < 0.28) {
-            await pauseWithinReadBudget(500, 1200);
+        if (state.interestsReached && state.footerVisible && state.atBottom) {
+            await page.mouse.wheel(0, randomInt(80, 180));
+            await pauseWithinReadBudget(300, 600);
+            state = await getProfileRenderState(page);
         }
+
+        const heightStable = previousHeight > 0 &&
+            Math.abs(state.scrollHeight - previousHeight) < 80;
+   const sectionsLoaded =
+    seen.about &&
+    seen.experience &&
+    seen.education &&
+    seen.skills;
+
+const trueEndReached =
+    sectionsLoaded &&
+    state.interestsReached &&
+    state.footerVisible &&
+    state.atBottom &&
+    heightStable;
+        previousHeight = state.scrollHeight;
+        stableEndCount = trueEndReached ? stableEndCount + 1 : 0;
+
+        if (Math.random() < 0.08 && remainingReadMs() > 1600) {
+            await pauseWithinReadBudget(350, 600);
+        }
+
+      const profileFullyLoaded =
+    seen.about &&
+    seen.experience &&
+    seen.education &&
+    seen.skills &&
+    seen.interests &&
+    state.footerVisible;
+
+if (
+    elapsedReadMs() >= minimumReadMs &&
+    profileFullyLoaded &&
+    stableEndCount >= 3
+) {
+    console.log("Profile fully loaded.");
+    break;
+}
+// Safety timeout only
+// Safety timeout only
+if (elapsedReadMs() >= maximumReadMs) {
+    console.log("Safety timeout reached.");
+    break;
+}
     }
 
     console.log("Finished reading profile.");
+}
+
+// Keep extraction separate from rendering: after the human read, continue only
+// when the real end is still not proven. This prevents writing false empty
+// Experience/Education/Skills arrays while avoiding changes to navigation.
+async function finishProfileRendering(page) {
+    let stableEndCount = 0;
+    let previousHeight = 0;
+    const seen = {
+    about: false,
+    experience: false,
+    education: false,
+    skills: false,
+    interests: false
+};
+    const started = Date.now();
+    const maxRenderMs = 10000;
+
+    while (Date.now() - started < maxRenderMs) {
+        let state = await getProfileRenderState(page);
+        seen.about ||= state.hasAbout;
+seen.experience ||= state.hasExperience;
+seen.education ||= state.hasEducation;
+seen.skills ||= state.hasSkills;
+seen.interests ||= state.interestsReached;
+        console.log({
+    scrollY: state.scrollY,
+    scrollHeight: state.scrollHeight,
+    atBottom: state.atBottom,
+    footerVisible: state.footerVisible,
+    interestsReached: state.interestsReached,
+    hasAbout: state.hasAbout,
+    hasExperience: state.hasExperience,
+    hasEducation: state.hasEducation,
+    hasSkills: state.hasSkills
+});
+        const heightStable = previousHeight > 0 &&
+            Math.abs(state.scrollHeight - previousHeight) < 80;
+
+        if (state.interestsReached && state.footerVisible && state.atBottom && heightStable) {
+            stableEndCount += 1;
+        } else {
+            stableEndCount = 0;
+        }
+
+        previousHeight = state.scrollHeight;
+
+        if (stableEndCount >= 2) {
+            return;
+        }
+
+        await page.mouse.wheel(0, randomInt(850, 1200));
+        await pause(page, 180, 320);
+
+        if (Math.random() < 0.12) {
+            await page.mouse.wheel(0, -randomInt(80, 180));
+            await pause(page, 120, 260);
+        }
+
+        state = await getProfileRenderState(page);
+
+        if (state.interestsReached && state.footerVisible && state.atBottom) {
+            await page.mouse.wheel(0, randomInt(100, 220));
+            await pause(page, 180, 320);
+        }
+    }
+}
+
+async function waitForProfileContent(page) {
+    await page.locator(SELECTORS.main).first().waitFor({
+        state: "visible",
+        timeout: TIMEOUTS.contentMs
+    });
+
+    await page.waitForFunction(() => {
+        const clean = value => (value || "").replace(/\s+/g, " ").trim();
+        const main = document.querySelector("main");
+        const topCard = [...document.querySelectorAll("main section")]
+            .find(section => section.getAttribute("componentkey")?.toLowerCase().includes("topcard"));
+        const hasName = !!(
+            main?.querySelector("h1") ||
+            topCard?.querySelector("h2") ||
+            topCard?.querySelector("a[href*='/in/']")
+        );
+     const sectionCount = [...document.querySelectorAll("main section h2, main section h3")]
+    .filter(heading =>
+        /^(about|activity|experience|education|skills)\b/i.test(
+            clean(heading.innerText)
+        )
+    ).length;
+
+return hasName && sectionCount >= 3;
+    }, {
+        timeout: TIMEOUTS.contentMs
+    }).catch(() => {});
 }
 
 async function waitBetweenProfiles(page) {
@@ -763,16 +856,13 @@ async function scrapeProfile(page) {
     }
 
     await page.waitForLoadState("domcontentloaded", {
-    timeout: TIMEOUTS.contentMs
-});
+        timeout: TIMEOUTS.contentMs
+    });
 
-await page.waitForLoadState("networkidle", {
-    timeout: 3000
-}).catch(() => {});
-
-// Small pause to let LinkedIn finish rendering
-await pause(page, 300, 900);
+    await waitForProfileContent(page);
+    await pause(page, 300, 900);
     await humanReadProfile(page);
+    await finishProfileRendering(page);
 
     const currentUrl = page.url();
 
@@ -780,33 +870,44 @@ await pause(page, 300, 900);
         throw new Error("Profile unavailable or LinkedIn session needs attention.");
     }
 
-    const lines = await getMainLines(page);
-    console.log("First 20 lines:");
-console.log(lines.slice(0, 20));
-    const name = await extractName(page, lines);
-await pause(page, 80, 180);
-    const headline = await extractHeadline(page, lines, name);
-    console.log("Headline:", headline);
-await pause(page, 80, 180);
-    const company = await extractCompany(page, lines, headline);
-await pause(page, 80, 180);
-    const college = await extractCollege(page, lines);
-await pause(page, 80, 180);
-    const location = await extractLocation(page, lines);
-await pause(page, 80, 180);
-    const about = await extractAbout(page, lines);
-await pause(page, 80, 180);
-    const connectionStatus = await extractConnectionStatus(page);
+    const header = await extractHeader(page);
+    const about = await extractAbout(page);
+    let experience = await extractExperienceSection(page);
+
+    // LinkedIn can render the Experience heading before the card text settles.
+    // If the section is visible but parsed empty, do one small human-style nudge
+    // and retry once instead of writing a false empty array.
+    if (!experience.length && await hasExperienceSection(page)) {
+        await page.mouse.wheel(0, -randomInt(120, 260));
+        await pause(page, 180, 360);
+        await page.mouse.wheel(0, randomInt(420, 760));
+        await pause(page, 450, 850);
+        experience = await extractExperienceSection(page);
+    }
+
+    const education = await extractEducation(page);
+    const skills = await extractSkills(page);
+    const currentCompany = header.current_company ||
+        (experience[0] ? experience[0].company : "");
+    const position = (experience[0] ? experience[0].title : "") ||
+        header.position ||
+        header.headline;
 
     return {
+        name: header.name,
         linkedin_url: normalizeProfileUrl(page.url()),
-        name,
-        headline,
-        company,
-        college,
-        location,
+        headline: header.headline,
+        location: header.location,
         about,
-        connection_status: connectionStatus
+        current_company: currentCompany,
+        position,
+        followers: header.followers,
+        connections: header.connections,
+        experience,
+        education,
+        skills,
+        company: currentCompany,
+        college: education[0] ? education[0].school : ""
     };
 }
 

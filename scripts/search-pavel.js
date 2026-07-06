@@ -42,7 +42,7 @@ async function selectCompany(page, company) {
     if (await checkbox.count() > 0) {
         console.log("Found checkbox");
 
-        await checkbox.first().highlight();
+        //await checkbox.first().highlight();
 
         await page.waitForTimeout(3000);
 
@@ -63,7 +63,7 @@ async function showResults(page) {
 
 console.log("Found:", await link.count());
 console.log(await link.evaluate(el => el.outerHTML));
-    await link.highlight();
+    //await link.highlight();
 
     await page.waitForTimeout(1000);
 

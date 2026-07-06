@@ -1,6 +1,5 @@
 async function scrapeProfile(page) {
 
-  await page.waitForLoadState('networkidle');
 
   const profile = await page.evaluate(() => {
 
@@ -22,12 +21,15 @@ async function scrapeProfile(page) {
     const about =
       aboutSection?.parentElement?.innerText || '';
 
-    return {
-      name,
-      headline,
-      location,
-      about
-    };
+   return {
+  name,
+  headline,
+  location,
+  about,
+  title: document.title,
+  h1Count: document.querySelectorAll("h1").length,
+  bodyLength: document.body.innerText.length
+};
   });
 
   return profile;

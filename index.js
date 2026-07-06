@@ -150,7 +150,7 @@ const target = JSON.parse(
 );
 
 const mutualConnections = JSON.parse(
-  fs.readFileSync(FILES.mutualDetails, "utf8")
+  fs.readFileSync(FILES.mutuals, "utf8")
 );
 
 console.log("");

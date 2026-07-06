@@ -86,51 +86,6 @@ async function loadTarget() {
 
 
 
-async function collectProfileUrls(page) {
- async function collectProfiles(page) {
-
-    await page.waitForTimeout(TIMEOUTS.afterManualFilterMs);
-
-    const profiles = await page
-        .locator(SELECTORS.profileLinks)
-        .evaluateAll(links => {
-
-            const results = [];
-
-            for (const link of links) {
-
-                const href = link.href;
-
-                const name =
-                    link.textContent?.trim() || "";
-
-                results.push({
-                    name,
-                    linkedin_url: href
-                });
-            }
-
-            return results;
-        });
-
-    if (!profiles.length) {
-        console.log("No visible LinkedIn profiles found.");
-    }
-
-    return profiles;
-}
-    await page.waitForTimeout(TIMEOUTS.afterManualFilterMs);
-
-    const urls = await page
-        .locator(SELECTORS.profileLinks)
-        .evaluateAll(links => links.map(link => link.href));
-
-    if (!urls.length) {
-        console.log("No visible LinkedIn profile links found on the page.");
-    }
-
-    return urls;
-}
 async function collectProfiles(page) {
 
     await page.waitForTimeout(TIMEOUTS.afterManualFilterMs);
@@ -147,7 +102,6 @@ async function collectProfiles(page) {
                     name: (link.textContent || "").trim(),
                     linkedin_url: link.href
                 });
-
             }
 
             return results;
@@ -159,6 +113,7 @@ async function collectProfiles(page) {
 
     return profiles;
 }
+
 async function scrollToBottom(page) {
 
 let previousCount = 0;
@@ -264,8 +219,11 @@ function normalizeUrls(urls, targetUrl) {
 
     return [...uniqueUrls];
 }
-function normalizeProfiles(profiles, targetUrl) {
-
+function normalizeProfiles(
+    profiles,
+    targetUrl,
+    targetName
+) {
     const normalizedTargetUrl =
         normalizeLinkedInProfileUrl(targetUrl);
 
@@ -274,8 +232,8 @@ function normalizeProfiles(profiles, targetUrl) {
     for (const profile of profiles) {
 
        const normalizedUrl =
-    normalizeProfileUrl(
-        mutualProfile.linkedin_url
+normalizeLinkedInProfileUrl(
+profile.linkedin_url
     );
         if (!normalizedUrl) {
             continue;
@@ -287,7 +245,14 @@ function normalizeProfiles(profiles, targetUrl) {
         ) {
             continue;
         }
-
+if (
+    targetName &&
+    (profile.name || "")
+        .toLowerCase()
+        .includes(targetName.toLowerCase())
+) {
+    continue;
+}
         uniqueProfiles.set(normalizedUrl, {
             name: (profile.name || "").trim(),
             linkedin_url: normalizedUrl
@@ -302,6 +267,23 @@ async function saveResults(profileUrls) {
         OUTPUT_PATH,
         JSON.stringify(profileUrls, null, 2) + "\n"
     );
+}
+
+async function browseFeedNaturally(page) {
+
+    console.log("");
+    console.log("Returning to LinkedIn feed...");
+
+    await page.goto(
+        "https://www.linkedin.com/feed/",
+        {
+            waitUntil: "domcontentloaded"
+        }
+    );
+
+    await page.waitForTimeout(5000);
+
+    console.log("Feed opened.");
 }
 
 function logTarget(target) {
@@ -353,14 +335,18 @@ console.log("");
 
 const profiles = normalizeProfiles(
     collectedProfiles,
-    target.url
+    target.url,
+    target.name
 );
 await saveResults(profiles);
-        console.log("");
+
+await browseFeedNaturally(page);
+
+console.log("");
 console.log("Profiles collected:", profiles.length);
-        console.log("Saved: data/mutuals.json");
-        console.log("Time taken:", formatDuration(startedAt));
-        console.log("");
+console.log("Saved: data/mutuals.json");
+console.log("Time taken:", formatDuration(startedAt));
+console.log("");
     } catch (err) {
         console.error("");
         console.error("Collect mutuals failed");
