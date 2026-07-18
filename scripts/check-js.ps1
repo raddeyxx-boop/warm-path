@@ -1,10 +1,21 @@
 $ErrorActionPreference = 'Stop'
 
-$files = git ls-files '*.js' |
+$files = Get-ChildItem -Recurse -Filter '*.js' |
+    ForEach-Object {
+        Resolve-Path -Relative $_.FullName
+    } |
+    ForEach-Object {
+        $_ -replace '^\.\\', ''
+    } |
     Where-Object {
         $_ -notlike 'node_modules/*' -and
+        $_ -notlike 'node_modules\*' -and
         $_ -notlike 'fresh-profile/*' -and
-        $_ -notlike 'linkedin-profile/*'
+        $_ -notlike 'fresh-profile\*' -and
+        $_ -notlike 'linkedin-profile/*' -and
+        $_ -notlike 'linkedin-profile\*' -and
+        $_ -notlike 'n8n_backup/*' -and
+        $_ -notlike 'n8n_backup\*'
     }
 
 foreach ($file in $files) {

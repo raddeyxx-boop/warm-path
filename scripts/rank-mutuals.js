@@ -376,14 +376,26 @@ async function scrapeProfile(page, url, cache) {
     }
 }
 
-(async () => {
+function normalizeMutualInput(value) {
+    if (typeof value === 'string') {
+        return value;
+    }
+
+    if (value && typeof value === 'object') {
+        return value.linkedin_url || value.url || '';
+    }
+
+    return '';
+}
+
+async function main() {
 
     let urls = JSON.parse(
         fs.readFileSync(
             './data/mutuals.json',
             'utf8'
         )
-    );
+    ).map(normalizeMutualInput).filter(Boolean);
 
     const profileLimit = parsePositiveInteger(process.env.PROFILE_LIMIT, 0);
     const batchSize = parsePositiveInteger(process.env.BATCH_SIZE, 3);
@@ -403,53 +415,57 @@ async function scrapeProfile(page, url, cache) {
 
     console.log('Processing ' + urls.length + ' mutuals in ' + batches.length + ' batch(es).');
 
-    for (const batch of batches) {
-        for (const url of batch) {
+    try {
+        for (const batch of batches) {
+            for (const url of batch) {
 
-            console.log('Checking:', url);
+                console.log('Checking:', url);
 
-            try {
-                const profile =
-                    await scrapeProfile(
-                        page,
-                        url,
-                        cache
-                    );
+                try {
+                    const profile =
+                        await scrapeProfile(
+                            page,
+                            url,
+                            cache
+                        );
 
-                profile.score =
-                    scoreProfile(profile);
+                    profile.score =
+                        scoreProfile(profile);
 
-                results.push(profile);
-                consecutiveFailures = 0;
+                    results.push(profile);
+                    consecutiveFailures = 0;
 
-                console.log({
-                    name: profile.name,
-                    headline: profile.headline,
-                    company: profile.company,
-                    location: profile.location,
-                    score: profile.score
-                });
-            } catch (err) {
-                consecutiveFailures += 1;
-                console.error('Failed: ' + url);
-                console.error(err.message);
+                    console.log({
+                        name: profile.name,
+                        headline: profile.headline,
+                        company: profile.company,
+                        location: profile.location,
+                        score: profile.score
+                    });
+                } catch (err) {
+                    consecutiveFailures += 1;
+                    console.error('Failed: ' + url);
+                    console.error(err.message);
 
-                if (isFatalError(err) || consecutiveFailures >= 3) {
-                    console.error('Stopping due to repeated failures or blocking.');
-                    stopped = true;
-                    break;
+                    if (isFatalError(err) || consecutiveFailures >= 3) {
+                        console.error('Stopping due to repeated failures or blocking.');
+                        stopped = true;
+                        break;
+                    }
                 }
+
+                await sleep(6000, 10000);
             }
 
-            await sleep(6000, 10000);
-        }
+            if (stopped) {
+                break;
+            }
 
-        if (stopped) {
-            break;
+            console.log('Batch complete. Pausing before next batch.');
+            await sleep(10000, 15000);
         }
-
-        console.log('Batch complete. Pausing before next batch.');
-        await sleep(10000, 15000);
+    } finally {
+        await browser.close().catch(() => {});
     }
 
     results.sort(
@@ -480,6 +496,17 @@ async function scrapeProfile(page, url, cache) {
     console.log('');
     console.log('Saved: data/ranked-mutuals.csv');
 
-    await browser.close();
+}
 
-})();
+if (require.main === module) {
+    main().catch(err => {
+        console.error('rank-mutuals failed:');
+        console.error(err);
+        process.exitCode = 1;
+    });
+}
+
+module.exports = {
+    main,
+    normalizeMutualInput
+};

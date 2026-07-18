@@ -1,0 +1,572 @@
+[
+  {
+    "updatedAt": "2026-07-14T10:16:53.000Z",
+    "createdAt": "2026-07-08T07:48:17.097Z",
+    "id": "gYWWTlAoBPAFJtTe",
+    "name": "Warm Path Finder",
+    "description": null,
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "warm-path",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          64,
+          0
+        ],
+        "id": "cd8da9bb-a061-4979-867d-f83e57abd65f",
+        "name": "Webhook",
+        "webhookId": "19722fdf-f5e9-42da-92c7-a317a8b2a1ce"
+      },
+      {
+        "parameters": {
+          "jsCode": "const body = $input.first().json.body;\nconst profiles = Array.isArray(body) ? body : body?.mutual_connections;\nconst target = Array.isArray(body) ? {} : (body?.target || {});\n\nif (!Array.isArray(profiles)) {\n\tthrow new Error(\"Expected webhook body to contain mutual_connections array.\");\n}\n\nconst targetCompany = target.company || target.current_company || \"\";\nconst targetSchool = Array.isArray(target.education) && target.education[0]\n\t? target.education[0].school || \"\"\n\t: \"\";\n\nreturn profiles.map((profile, index) => ({\n\tjson: {\n\t\tprofile_id: index + 1,\n\t\ttarget,\n\t\ttarget_name: target.name || \"\",\n\t\tcompany: profile.company || targetCompany,\n\t\tcollege: profile.college || targetSchool,\n\t\t...profile,\n\t},\n}));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "id": "9f731714-6afc-4ee5-b332-af1b6fb88f94",
+        "name": "Split Profiles"
+      },
+      {
+        "parameters": {
+          "jsCode": "function toNumber(value) {\n\tif (!value) return 0;\n\n\tconst text = String(value).trim();\n\n\tif (text.includes(\"500+\")) return 500;\n\n\tconst number = text.replace(/[^\\d]/g, \"\");\n\n\treturn number ? Number(number) : 0;\n}\n\nreturn $input.all().map(item => {\n\n\tconst p = item.json;\n\n\treturn {\n\t\tjson: {\n\n\t\t\t...p,\n\n\t\t\tname: (p.name || \"\").trim(),\n\n\t\t\theadline: (p.headline || \"\").trim(),\n\n\t\t\tlocation: (p.location || \"\").trim(),\n\n\t\t\tabout: (p.about || \"\").trim(),\n\n\t\t\tcurrent_company: (p.current_company || \"\").trim(),\n\n\t\t\tposition: (p.position || \"\").trim(),\n\n\t\t\tcompany: (p.company || \"\").trim(),\n\n\t\t\tcollege: (p.college || \"\").trim(),\n\n\t\t\tfollowers: toNumber(p.followers),\n\n\t\t\tconnections: toNumber(p.connections),\n\n\t\t\texperience: Array.isArray(p.experience)\n\t\t\t\t? p.experience\n\t\t\t\t: [],\n\n\t\t\teducation: Array.isArray(p.education)\n\t\t\t\t? p.education\n\t\t\t\t: [],\n\n\t\t\tskills: Array.isArray(p.skills)\n\t\t\t\t? p.skills\n\t\t\t\t: []\n\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          400,
+          0
+        ],
+        "id": "12880c28-5ab3-4a99-81d8-3a91488a9ef6",
+        "name": "Normalize Data"
+      },
+      {
+        "parameters": {
+          "jsCode": "const TECH_KEYWORDS = [\n\t\"javascript\",\n\t\"typescript\",\n\t\"react\",\n\t\"angular\",\n\t\"vue\",\n\t\"node\",\n\t\"python\",\n\t\"java\",\n\t\"c#\",\n\t\".net\",\n\t\"aws\",\n\t\"azure\",\n\t\"gcp\",\n\t\"docker\",\n\t\"kubernetes\",\n\t\"sql\",\n\t\"mongodb\",\n\t\"postgresql\"\n];\n\nreturn $input.all().map(item => {\n\n\tconst p = item.json;\n\n\tconst text = [\n\t\tp.headline,\n\t\tp.about,\n\t\t...(p.skills || [])\n\t]\n\t.join(\" \")\n\t.toLowerCase();\n\n\tconst detectedSkills = TECH_KEYWORDS.filter(skill =>\n\t\ttext.includes(skill)\n\t);\n\n\treturn {\n\t\tjson: {\n\n\t\t\t...p,\n\n\t\t\ttext,\n\n\t\t\tdetected_skills: detectedSkills,\n\n\t\t\texperience_count: p.experience.length,\n\n\t\t\teducation_count: p.education.length,\n\n\t\t\tskill_count: p.skills.length,\n\n\t\t\thas_about: p.about.length > 0,\n\n\t\t\thas_location: p.location.length > 0,\n\n\t\t\thas_company: p.current_company.length > 0\n\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          576,
+          0
+        ],
+        "id": "a7bb6148-1a43-4f49-bce0-1610901a9b64",
+        "name": "Extract Features"
+      },
+      {
+        "parameters": {
+          "jsCode": "/**\n * ==========================================================\n * Warm Path Finder\n * Seniority Engine v2\n * ----------------------------------------------------------\n * Purpose:\n * Determine professional seniority using:\n * - Role\n * - Headline\n * - Position\n *\n * Outputs:\n * seniority\n * seniority_score\n * confidence\n * classification_reason\n * ==========================================================\n */\n\nfunction contains(text, keywords) {\n\treturn keywords.some(keyword => text.includes(keyword));\n}\n\nreturn $input.all().map(item => {\n\n\tconst role = (item.json.role || \"Other\").toLowerCase();\n\n\tconst text = [\n\t\titem.json.headline || \"\",\n\t\titem.json.position || \"\"\n\t]\n\t.join(\" \")\n\t.toLowerCase();\n\n\tlet seniority = \"Mid\";\n\tlet seniority_score = 40;\n\tlet confidence = 0.60;\n\tlet classification_reason = \"Default classification\";\n\n\t/* ======================================================\n\t   UNIVERSAL\n\t====================================================== */\n\n\tif (contains(text, [\"intern\", \"internship\", \"trainee\"])) {\n\t\tseniority = \"Intern\";\n\t\tseniority_score = 10;\n\t\tconfidence = 0.99;\n\t\tclassification_reason = \"Intern keyword detected\";\n\t}\n\n\telse if (contains(text, [\"junior\", \"jr.\"])) {\n\t\tseniority = \"Junior\";\n\t\tseniority_score = 20;\n\t\tconfidence = 0.98;\n\t\tclassification_reason = \"Junior keyword detected\";\n\t}\n\n\t/* ======================================================\n\t   ENGINEERING\n\t====================================================== */\n\n\telse if (role === \"engineering\") {\n\n\t\tif (contains(text, [\"principal engineer\", \"staff engineer\"])) {\n\t\t\tseniority = \"Lead\";\n\t\t\tseniority_score = 75;\n\t\t\tconfidence = 0.95;\n\t\t\tclassification_reason = \"Principal/Staff Engineer\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"technical lead\",\n\t\t\t\"tech lead\",\n\t\t\t\"team lead\",\n\t\t\t\"lead engineer\",\n\t\t\t\"lead developer\"\n\t\t])) {\n\t\t\tseniority = \"Lead\";\n\t\t\tseniority_score = 70;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Engineering Lead\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"engineering manager\",\n\t\t\t\"development manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Engineering Manager\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"senior software engineer\",\n\t\t\t\"senior developer\",\n\t\t\t\"senior engineer\",\n\t\t\t\"sr.\"\n\t\t])) {\n\t\t\tseniority = \"Senior\";\n\t\t\tseniority_score = 60;\n\t\t\tconfidence = 0.95;\n\t\t\tclassification_reason = \"Senior Engineer\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.85;\n\t\t\tclassification_reason = \"Engineering default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   HR\n\t====================================================== */\n\n\telse if (role === \"hr\") {\n\n\t\tif (contains(text, [\n\t\t\t\"director\",\n\t\t\t\"head of hr\",\n\t\t\t\"head of people\"\n\t\t])) {\n\t\t\tseniority = \"Director\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"HR Director\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"hr manager\",\n\t\t\t\"human resources manager\",\n\t\t\t\"people manager\",\n\t\t\t\"talent manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"HR Manager\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"executive\",\n\t\t\t\"specialist\",\n\t\t\t\"generalist\",\n\t\t\t\"recruiter\",\n\t\t\t\"talent acquisition\"\n\t\t])) {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.92;\n\t\t\tclassification_reason = \"HR Professional\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.75;\n\t\t\tclassification_reason = \"HR default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   QA\n\t====================================================== */\n\n\telse if (role === \"qa\") {\n\n\t\tif (contains(text, [\n\t\t\t\"qa manager\",\n\t\t\t\"test manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"QA Manager\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"lead qa\",\n\t\t\t\"qa lead\",\n\t\t\t\"test lead\"\n\t\t])) {\n\t\t\tseniority = \"Lead\";\n\t\t\tseniority_score = 70;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"QA Lead\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"senior qa\",\n\t\t\t\"senior test engineer\"\n\t\t])) {\n\t\t\tseniority = \"Senior\";\n\t\t\tseniority_score = 60;\n\t\t\tconfidence = 0.96;\n\t\t\tclassification_reason = \"Senior QA\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.85;\n\t\t\tclassification_reason = \"QA default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   BUSINESS DEVELOPMENT\n\t====================================================== */\n\n\telse if (role === \"business development\") {\n\n\t\tif (contains(text, [\n\t\t\t\"director\",\n\t\t\t\"head of sales\",\n\t\t\t\"head of business\"\n\t\t])) {\n\t\t\tseniority = \"Director\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Business Director\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"manager\",\n\t\t\t\"sales manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"Business Manager\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.85;\n\t\t\tclassification_reason = \"Business default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   EXECUTIVE\n\t====================================================== */\n\n\telse if (role === \"executive\") {\n\n\t\tif (contains(text, [\n\t\t\t\"founder\",\n\t\t\t\"co-founder\"\n\t\t])) {\n\t\t\tseniority = \"Founder\";\n\t\t\tseniority_score = 100;\n\t\t\tconfidence = 1.00;\n\t\t\tclassification_reason = \"Founder\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"ceo\",\n\t\t\t\"cto\",\n\t\t\t\"coo\",\n\t\t\t\"chief\"\n\t\t])) {\n\t\t\tseniority = \"Executive\";\n\t\t\tseniority_score = 95;\n\t\t\tconfidence = 0.99;\n\t\t\tclassification_reason = \"C-Level Executive\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"director\",\n\t\t\t\"vice president\",\n\t\t\t\"vp\"\n\t\t])) {\n\t\t\tseniority = \"Director\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Director/VP\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Executive\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.90;\n\t\t\tclassification_reason = \"Executive default\";\n\t\t}\n\n\t}\n\n\treturn {\n\t\tjson: {\n\t\t\t...item.json,\n\n\t\t\tseniority,\n\t\t\tseniority_score,\n\n\t\t\tconfidence,\n\n\t\t\tclassification_reason\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          736,
+          0
+        ],
+        "id": "9ac6bc9c-3906-4a33-81bf-a5c44ef43968",
+        "name": "Seniority Engine"
+      },
+      {
+        "parameters": {
+          "jsCode": "function contains(text, keywords) {\n\treturn keywords.some(keyword => text.includes(keyword));\n}\n\nreturn $input.all().map(item => {\n\n\tconst role = (item.json.role || \"\").toLowerCase();\n\n\tconst text = [\n\t\titem.json.headline || \"\",\n\t\titem.json.position || \"\"\n\t].join(\" \").toLowerCase();\n\n\tlet decision_power = \"Low\";\n\tlet decision_power_score = 20;\n\tlet decision_reason = \"Default\";\n\n\t/* ========= Highest Authority ========= */\n\n\tif (contains(text, [\n\t\t\"founder\",\n\t\t\"co-founder\",\n\t\t\"ceo\",\n\t\t\"cto\",\n\t\t\"coo\",\n\t\t\"chief\"\n\t])) {\n\n\t\tdecision_power = \"Very High\";\n\t\tdecision_power_score = 100;\n\t\tdecision_reason = \"C-Level / Founder\";\n\n\t}\n\n\t/* ========= Directors ========= */\n\n\telse if (contains(text, [\n\t\t\"director\",\n\t\t\"vice president\",\n\t\t\"vp\",\n\t\t\"head of\"\n\t])) {\n\n\t\tdecision_power = \"High\";\n\t\tdecision_power_score = 90;\n\t\tdecision_reason = \"Director / VP\";\n\n\t}\n\n\t/* ========= Managers ========= */\n\n\telse if (contains(text, [\n\t\t\"manager\",\n\t\t\"team lead\",\n\t\t\"technical lead\",\n\t\t\"lead\"\n\t])) {\n\n\t\tdecision_power = \"High\";\n\t\tdecision_power_score = 80;\n\t\tdecision_reason = \"Management Position\";\n\n\t}\n\n\t/* ========= HR ========= */\n\n\telse if (role === \"hr\") {\n\n\t\tif (contains(text, [\n\t\t\t\"recruiter\",\n\t\t\t\"talent acquisition\"\n\t\t])) {\n\n\t\t\tdecision_power = \"Medium\";\n\t\t\tdecision_power_score = 60;\n\t\t\tdecision_reason = \"Recruiting Influence\";\n\n\t\t}\n\n\t\telse {\n\n\t\t\tdecision_power = \"Medium\";\n\t\t\tdecision_power_score = 55;\n\t\t\tdecision_reason = \"HR Influence\";\n\n\t\t}\n\n\t}\n\n\t/* ========= Engineering ========= */\n\n\telse if (role === \"engineering\") {\n\n\t\tif (item.json.seniority === \"Senior\") {\n\n\t\t\tdecision_power = \"Medium\";\n\t\t\tdecision_power_score = 50;\n\t\t\tdecision_reason = \"Senior Technical Contributor\";\n\n\t\t}\n\n\t\telse {\n\n\t\t\tdecision_power = \"Low\";\n\t\t\tdecision_power_score = 25;\n\t\t\tdecision_reason = \"Individual Contributor\";\n\n\t\t}\n\n\t}\n\n\treturn {\n\t\tjson: {\n\n\t\t\t...item.json,\n\n\t\t\tdecision_power,\n\n\t\t\tdecision_power_score,\n\n\t\t\tdecision_reason\n\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          928,
+          0
+        ],
+        "id": "824e0104-e0f7-4c11-b2e4-4f0c44e30a44",
+        "name": "Decision Power Engine"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map(item => {\n\tconst p = item.json;\n\n\treturn {\n\t\tjson: {\n\t\t\tprofile_id: p.profile_id,\n\n\t\t\ttarget_company: p.company,\n\n\t\t\tprofile: {\n\t\t\t\tname: p.name,\n\t\t\t\tlinkedin_url: p.linkedin_url,\n\t\t\t\theadline: p.headline,\n\t\t\t\tposition: p.position,\n\t\t\t\tcurrent_company: p.current_company,\n\t\t\t\tlocation: p.location,\n\t\t\t\tabout: p.about,\n\n\t\t\t\texperience: p.experience,\n\t\t\t\teducation: p.education,\n\t\t\t\tskills: p.skills,\n\n\t\t\t\tfollowers: p.followers,\n\t\t\t\tconnections: p.connections,\n\t\t\t\tmutual_connections: p.mutual_connections\n\t\t\t},\n\n\t\t\tanalysis: {\n\t\t\t\trole: p.role,\n\t\t\t\tseniority: p.seniority,\n\t\t\t\tdecision_power: p.decision_power,\n\t\t\t\thiring_influence: p.hiring_influence,\n\t\t\t\tdetected_skills: p.detected_skills\n\t\t\t}\n\t\t}\n\t};\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1136,
+          0
+        ],
+        "id": "623b3afc-1db9-4224-94de-1ab77b7ef858",
+        "name": "Prepare AI Input"
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=You are a relationship intelligence analyst.\n\nTarget:\n{{ $json.target }}\n\nCompany:\n{{ $json.company }}\n\nBest Introduction Path:\n{{ JSON.stringify($json.best_path) }}\n\n\nDetermine:\n\n1. Is this introduction path believable?\n2. Why?\n3. Return a confidence score from 0-100.\n4. Return a recommendation.\n\nRespond ONLY in JSON:\n\n{\n\"verified\": true,\n\"confidence\": 95,\n\"reason\": \"...\",\n\"recommendation\": \"...\"\n}\n",
+          "hasOutputParser": true,
+          "batching": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.9,
+        "position": [
+          1648,
+          1296
+        ],
+        "id": "67246936-2d8c-4554-b568-b34c010b988e",
+        "name": "AI Verification"
+      },
+      {
+        "parameters": {
+          "modelName": "models/gemini-2.5-flash-lite",
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1.1,
+        "position": [
+          1648,
+          1520
+        ],
+        "id": "250c2f5a-9201-4448-9df7-852d8cd5415f",
+        "name": "Google Gemini Chat Model",
+        "credentials": {
+          "googlePalmApi": {
+            "id": "Zv0NR7BPKRVaBY4r",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=Evaluate this LinkedIn profile.\n\nTarget Company:\n{{ $json.target_company }}\n\nProfile Data:\n{{ JSON.stringify($json.profile, null, 2) }}\n\nRule Engine Analysis:\n{{ JSON.stringify($json.analysis, null, 2) }}\n\nReturn ONLY this JSON structure:\n\n{\n  \"relationship_strength\": {\n    \"score\": 0,\n    \"level\": \"\"\n  },\n  \"credibility\": {\n    \"score\": 0,\n    \"level\": \"\"\n  },\n  \"company_alignment\": {\n    \"score\": 0,\n    \"reason\": \"\"\n  },\n  \"industry_alignment\": {\n    \"score\": 0,\n    \"reason\": \"\"\n  },\n  \"likelihood_of_reply\": {\n    \"score\": 0,\n    \"reason\": \"\"\n  },\n  \"introduction_quality\": {\n    \"score\": 0,\n    \"reason\": \"\"\n  },\n  \"overall_recommendation\": \"\",\n  \"explanation\": \"\",\n  \"personalized_introduction\": \"\"\n}",
+          "hasOutputParser": true,
+          "messages": {
+            "messageValues": [
+              {
+                "message": "You are an expert LinkedIn networking strategist specializing in warm introductions. Your task is to evaluate ONE LinkedIn profile at a time. The input contains: 1. A LinkedIn profile. 2. Rule-based analysis already computed by the application. IMPORTANT RULES Treat these fields as factual and DO NOT recalculate them: - role - seniority - decision_power - hiring_influence Use them as inputs to your reasoning. Your job is to evaluate: 1. Relationship Strength 2. Credibility 3. Company Alignment 4. Industry Alignment 5. Likelihood of Reply 6. Introduction Quality 7. Overall Recommendation 8. Explanation 9. Personalized Introduction Message Be objective. Never invent information. Only use facts contained in the input. Return ONLY valid JSON. Do not wrap the JSON inside markdown. Do not add any text before or after the JSON."
+              }
+            ]
+          },
+          "batching": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.9,
+        "position": [
+          1984,
+          1152
+        ],
+        "id": "b5817e3e-4a87-483d-9247-e1d6731810f7",
+        "name": "Introduction Generator"
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+        "typeVersion": 1.1,
+        "position": [
+          1984,
+          1376
+        ],
+        "id": "ea4710b0-7997-46ca-a3e9-79d8a2e84f34",
+        "name": "Google Gemini Chat Model1",
+        "credentials": {
+          "googlePalmApi": {
+            "id": "Zv0NR7BPKRVaBY4r",
+            "name": "Google Gemini(PaLM) Api account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map(item => {\n    const p = item.json;\n\n    const decisionPower = p.analysis.decision_power || \"Low\";\n    const seniority = p.analysis.seniority || \"Junior\";\n    const companyMatch = p.target_company === p.profile.current_company;\n\n    const relationshipStrength = companyMatch ? 85 : 45;\n\n    const credibility =\n        seniority === \"Executive\" || seniority === \"Founder\"\n            ? 95\n            : seniority === \"Lead\"\n            ? 85\n            : seniority === \"Mid\"\n            ? 75\n            : 60;\n\n    const likelihood =\n        decisionPower === \"Very High\"\n            ? 90\n            : decisionPower === \"High\"\n            ? 80\n            : decisionPower === \"Medium\"\n            ? 65\n            : 50;\n\n    const introductionQuality = Math.round(\n        (relationshipStrength + credibility + likelihood) / 3\n    );\n\n    const recommendation =\n        introductionQuality >= 85\n            ? \"Strong\"\n            : introductionQuality >= 70\n            ? \"Moderate\"\n            : \"Weak\";\n\n    return {\n        json: {\n            ...p,\n\n            ai_analysis: {\n                relationship_strength: {\n                    score: relationshipStrength,\n                    level:\n                        relationshipStrength >= 80\n                            ? \"Strong\"\n                            : relationshipStrength >= 60\n                            ? \"Medium\"\n                            : \"Weak\"\n                },\n\n                credibility: {\n                    score: credibility,\n                    level:\n                        credibility >= 85\n                            ? \"High\"\n                            : credibility >= 70\n                            ? \"Medium\"\n                            : \"Low\"\n                },\n\n                company_alignment: {\n                    score: companyMatch ? 100 : 40,\n                    reason: companyMatch\n                        ? \"Currently works at the target company.\"\n                        : \"Works outside the target company.\"\n                },\n\n                industry_alignment: {\n                    score: 80,\n                    reason: \"Estimated from the detected role and experience.\"\n                },\n\n                likelihood_of_reply: {\n                    score: likelihood,\n                    reason:\n                        \"Estimated using seniority, decision power and profile quality.\"\n                },\n\n                introduction_quality: {\n                    score: introductionQuality,\n                    reason:\n                        \"Estimated from relationship strength, credibility and likelihood of reply.\"\n                },\n\n                overall_recommendation: recommendation,\n\n                explanation:\n                    \"Temporary mock AI analysis generated from the rule-engine outputs.\",\n\n                personalized_introduction:\n                    \"Hi \" + p.profile.name + \", I came across your profile while exploring professionals at \" + p.target_company + \". I was impressed by your background and would love to connect and learn more about your experience.\"\n            }\n        }\n    };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          0
+        ],
+        "id": "9effcd80-45da-4fbf-9246-eb4560cc34df",
+        "name": "tem Mock AI Analysis"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map(item => {\n    const p = item.json;\n\n    const ai = p.ai_analysis;\n\n    const relationship = ai.relationship_strength.score;\n    const credibility = ai.credibility.score;\n    const company = ai.company_alignment.score;\n    const industry = ai.industry_alignment.score;\n    const reply = ai.likelihood_of_reply.score;\n    const intro = ai.introduction_quality.score;\n\n    const finalScore = Math.round(\n        relationship * 0.20 +\n        credibility * 0.20 +\n        company * 0.20 +\n        industry * 0.15 +\n        reply * 0.15 +\n        intro * 0.10\n    );\n\n    let finalGrade;\n\n    if (finalScore >= 90)\n        finalGrade = \"A+\";\n    else if (finalScore >= 80)\n        finalGrade = \"A\";\n    else if (finalScore >= 70)\n        finalGrade = \"B\";\n    else if (finalScore >= 60)\n        finalGrade = \"C\";\n    else if (finalScore >= 50)\n        finalGrade = \"D\";\n    else\n        finalGrade = \"F\";\n\n    return {\n        json: {\n            ...p,\n\n            final_score: finalScore,\n            final_grade: finalGrade\n        }\n    };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1552,
+          0
+        ],
+        "id": "7acd733c-7e42-4087-a0a4-c94d93b8fab8",
+        "name": "Final Scoring"
+      },
+      {
+        "parameters": {
+          "sortFieldsUi": {
+            "sortField": [
+              {
+                "fieldName": "final_score",
+                "order": "descending"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.sort",
+        "typeVersion": 1,
+        "position": [
+          1760,
+          0
+        ],
+        "id": "b71143f6-7cb6-49c5-81d8-bc30b0eabbdb",
+        "name": "Rank Candidates"
+      },
+      {
+        "parameters": {
+          "jsCode": "const total = $input.all();\n\nreturn total.map((item, index) => {\n  const p = item.json;\n\n  return {\n    json: {\n      rank: index + 1,\n\n      score: p.final_score,\n      grade: p.final_grade,\n\n      name: p.profile.name,\n      linkedin: p.profile.linkedin_url,\n\n      company: p.profile.current_company,\n      position: p.profile.position,\n      location: p.profile.location,\n\n      role: p.analysis.role,\n      seniority: p.analysis.seniority,\n      decision_power: p.analysis.decision_power,\n\n      recommendation: p.ai_analysis.overall_recommendation,\n      explanation: p.ai_analysis.explanation,\n      introduction: p.ai_analysis.personalized_introduction,\n\n      profile: p.profile,\n      analysis: p.analysis,\n      ai_analysis: p.ai_analysis\n    }\n  };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1968,
+          0
+        ],
+        "id": "121de921-77cb-4b23-a441-689177c64f1a",
+        "name": "Build Final Report"
+      },
+      {
+        "parameters": {
+          "tableId": "ranked_candidates",
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "rank",
+                "fieldValue": "={{ $json.rank }}"
+              },
+              {
+                "fieldId": "final_score",
+                "fieldValue": "={{ $json.score }}"
+              },
+              {
+                "fieldId": "final_grade",
+                "fieldValue": "={{ $json.grade }}"
+              },
+              {
+                "fieldId": "name",
+                "fieldValue": "={{ $json.name }}"
+              },
+              {
+                "fieldId": "linkedin_url",
+                "fieldValue": "={{ $json.linkedin }}"
+              },
+              {
+                "fieldId": "current_company",
+                "fieldValue": "={{ $json.company }}"
+              },
+              {
+                "fieldId": "position",
+                "fieldValue": "={{ $json.position }}"
+              },
+              {
+                "fieldId": "location",
+                "fieldValue": "={{ $json.location }}"
+              },
+              {
+                "fieldId": "role",
+                "fieldValue": "={{ $json.role }}"
+              },
+              {
+                "fieldId": "seniority",
+                "fieldValue": "={{ $json.seniority }}"
+              },
+              {
+                "fieldId": "decision_power",
+                "fieldValue": "={{ $json.decision_power }}"
+              },
+              {
+                "fieldId": "recommendation",
+                "fieldValue": "={{ $json.recommendation }}"
+              },
+              {
+                "fieldId": "explanation",
+                "fieldValue": "={{ $json.explanation }}"
+              },
+              {
+                "fieldId": "personalized_introduction",
+                "fieldValue": "={{$json.ai_analysis.personalized_introduction}}"
+              },
+              {
+                "fieldId": "profile",
+                "fieldValue": "={{ $json.profile }}"
+              },
+              {
+                "fieldId": "analysis",
+                "fieldValue": "={{ $json.analysis }}"
+              },
+              {
+                "fieldId": "ai_analysis",
+                "fieldValue": "={{ $json.ai_analysis }}"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          2416,
+          0
+        ],
+        "id": "95f98b5c-9f18-45df-b85a-3b79f5d7b3d2",
+        "name": "Save Candidates",
+        "credentials": {
+          "supabaseApi": {
+            "id": "s7RGwOBWIRTFdwPi",
+            "name": "Supabase account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "tableId": "ranked_candidates"
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          2576,
+          1040
+        ],
+        "id": "a8e61c78-b702-4e62-82f5-87bfc08ed7bf",
+        "name": "Delete Old Candidates",
+        "credentials": {
+          "supabaseApi": {
+            "id": "s7RGwOBWIRTFdwPi",
+            "name": "Supabase account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map(item => {\n    const json = { ...item.json };\n    const obsoleteField = [\"warm\", \"score\"].join(\"_\");\n\n    delete json[obsoleteField];\n\n    return { json };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2624,
+          0
+        ],
+        "id": "f3f4fd01-6bf1-4b38-9d37-4c7c31dc0e62",
+        "name": "Clean Response"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Split Profiles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split Profiles": {
+        "main": [
+          [
+            {
+              "node": "Normalize Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Data": {
+        "main": [
+          [
+            {
+              "node": "Extract Features",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Features": {
+        "main": [
+          [
+            {
+              "node": "Seniority Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Seniority Engine": {
+        "main": [
+          [
+            {
+              "node": "Decision Power Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Decision Power Engine": {
+        "main": [
+          [
+            {
+              "node": "Prepare AI Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Google Gemini Chat Model": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Verification",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Google Gemini Chat Model1": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Introduction Generator",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare AI Input": {
+        "main": [
+          [
+            {
+              "node": "tem Mock AI Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "tem Mock AI Analysis": {
+        "main": [
+          [
+            {
+              "node": "Final Scoring",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Final Scoring": {
+        "main": [
+          [
+            {
+              "node": "Rank Candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rank Candidates": {
+        "main": [
+          [
+            {
+              "node": "Build Final Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Final Report": {
+        "main": [
+          [
+            {
+              "node": "Save Candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete Old Candidates": {
+        "main": [
+          []
+        ]
+      },
+      "Save Candidates": {
+        "main": [
+          [
+            {
+              "node": "Clean Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate",
+      "availableInMCP": false
+    },
+    "staticData": null,
+    "meta": {
+      "templateCredsSetupCompleted": true
+    },
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "cfd9c49e-a9eb-46f2-aca5-5b87a782e5e7",
+    "activeVersionId": "cfd9c49e-a9eb-46f2-aca5-5b87a782e5e7",
+    "versionCounter": 161,
+    "triggerCount": 1,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-07-08T07:48:17.103Z",
+        "createdAt": "2026-07-08T07:48:17.103Z",
+        "role": "workflow:owner",
+        "workflowId": "gYWWTlAoBPAFJtTe",
+        "projectId": "1qnsekfri14xGivZ",
+        "project": {
+          "updatedAt": "2026-06-12T23:26:38.862Z",
+          "createdAt": "2026-06-12T23:26:13.612Z",
+          "id": "1qnsekfri14xGivZ",
+          "name": "Ali raddeyxx@gmail.com <raddeyxx@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "5088bf5d-0747-4036-b40d-c75330db1c47"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]

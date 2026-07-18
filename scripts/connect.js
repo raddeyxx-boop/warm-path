@@ -73,6 +73,7 @@ async function connectToProfile(profileUrl) {
     } catch (err) {
 
         console.error('ERROR:', err.message);
+        throw err;
 
     } finally {
 
@@ -80,6 +81,19 @@ async function connectToProfile(profileUrl) {
     }
 }
 
-connectToProfile(
-    'https://www.linkedin.com/in/example-profile/'
-);
+if (require.main === module) {
+    const profileUrl = process.argv[2];
+
+    if (!profileUrl) {
+        console.error('Usage: node scripts/connect.js "https://www.linkedin.com/in/profile/"');
+        process.exitCode = 1;
+    } else {
+        connectToProfile(profileUrl).catch(() => {
+            process.exitCode = 1;
+        });
+    }
+}
+
+module.exports = {
+    connectToProfile
+};

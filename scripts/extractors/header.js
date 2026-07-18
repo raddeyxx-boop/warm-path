@@ -1,18 +1,50 @@
 const { cleanText } = require("./dom-utils");
+const { normalizeNumericField } = require("../../utils/NumericNormalizer");
+
+function escapeRegExp(value) {
+    return cleanText(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function derivePositionFromHeadline(headline, currentCompany = "") {
+    const cleanedHeadline = cleanText(headline);
+    const company = cleanText(currentCompany);
+
+    if (!cleanedHeadline) {
+        return "";
+    }
+
+    const primaryHeadline = cleanedHeadline.split(/\s+[|•]\s+/)[0].trim();
+
+    if (company) {
+        const companyMatch = primaryHeadline.match(
+            new RegExp(`^(.+?)\\s+(?:at|@)\\s+${escapeRegExp(company)}\\b`, "i")
+        );
+
+        if (companyMatch) {
+            return cleanText(companyMatch[1]);
+        }
+    }
+
+    const genericMatch = primaryHeadline.match(/^(.+?)\s+(?:at|@)\s+.+$/i);
+
+    if (genericMatch) {
+        return cleanText(genericMatch[1]);
+    }
+
+    return primaryHeadline || cleanedHeadline;
+}
 
 async function extractHeader(page) {
     try {
-        return await page.evaluate(() => {
+        const header = await page.evaluate(() => {
             const clean = value => (value || "")
                 .replace(/\u00a0/g, " ")
                 .replace(/\s+/g, " ")
                 .trim();
-
             const getLines = element => (element?.innerText || "")
                 .split(/\n+/)
                 .map(clean)
                 .filter(Boolean);
-
             const firstText = (selectors, root = document) => {
                 for (const selector of selectors) {
                     const element = root.querySelector(selector);
@@ -25,13 +57,53 @@ async function extractHeader(page) {
 
                 return "";
             };
+            const isProfileSection = section => !!section && !section.closest("aside");
+            const isHeaderNoise = line =>
+                /^(he\/him|she\/her|they\/them|contact info|connect|message|follow|more)$/i.test(line) ||
+                /\b(mutual connection|followers?|connections?)\b/i.test(line) ||
+                /^[\u00b7•]/.test(line);
+            const looksLikeLocation = line =>
+                !isHeaderNoise(line) &&
+                !/^open to work$/i.test(line) &&
+                !/^hiring$/i.test(line) &&
+                /(^|\b)(greater\s+.+\s+area|.+,\s*.+|india|united states|usa|united kingdom|canada|germany|sweden|australia|singapore|france|netherlands|ireland|area)\b/i.test(line);
+            const derivePosition = (headline, company) => {
+                const cleanedHeadline = clean(headline);
+                const cleanedCompany = clean(company);
+
+                if (!cleanedHeadline) {
+                    return "";
+                }
+
+                const primaryHeadline = cleanedHeadline.split(/\s+[\|\u2022]\s+/)[0].trim();
+                const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+                if (cleanedCompany) {
+                    const companyMatch = primaryHeadline.match(
+                        new RegExp(`^(.+?)\\s+(?:at|@)\\s+${escapeRegExp(cleanedCompany)}\\b`, "i")
+                    );
+
+                    if (companyMatch) {
+                        return clean(companyMatch[1]);
+                    }
+                }
+
+                const genericMatch = primaryHeadline.match(/^(.+?)\s+(?:at|@)\s+.+$/i);
+
+                if (genericMatch) {
+                    return clean(genericMatch[1]);
+                }
+
+                return primaryHeadline || cleanedHeadline;
+            };
 
             const h1 = document.querySelector("main h1, h1");
             const headerSection =
-                h1?.closest("section") ||
+                (isProfileSection(h1?.closest("section")) ? h1.closest("section") : null) ||
                 [...document.querySelectorAll("main section")]
+                    .filter(isProfileSection)
                     .find(section => section.getAttribute("componentkey")?.toLowerCase().includes("topcard")) ||
-                document.querySelector("main section") ||
+                [...document.querySelectorAll("main section")].find(isProfileSection) ||
                 document.querySelector("main");
 
             const name = clean(
@@ -63,6 +135,7 @@ async function extractHeader(page) {
                     !/^(connect|message|follow)$/i.test(line) &&
                     !/\bmutual connection\b/i.test(line)
                 );
+
                 school = afterContact[1] || "";
             }
 
@@ -78,30 +151,42 @@ async function extractHeader(page) {
                         return false;
                     }
 
-                    return !/^(he\/him|she\/her|they\/them|contact info|connect|message|follow)$/i.test(line) &&
-                        !/^·/.test(line) &&
-                        !/\b(mutual connection|followers?|connections?)\b/i.test(line) &&
+                    return !isHeaderNoise(line) &&
                         !/^\w[\w\s,.'-]+,\s*\w/i.test(line) &&
                         line.length <= 180;
                 }) || "";
             }
 
-            let location = firstText([
-                ".pv-text-details__left-panel span.text-body-small.inline",
-                ".pv-text-details__left-panel span.text-body-small",
-                ".text-body-small.inline"
-            ], headerSection);
+            let location = [
+                ...headerSection.querySelectorAll(`
+                    .pv-text-details__left-panel span.text-body-small.inline,
+                    .pv-text-details__left-panel span.text-body-small,
+                    span.text-body-small.inline,
+                    span.text-body-small
+                `)
+            ]
+                .map(element => clean(element.innerText || element.textContent))
+                .find(looksLikeLocation) || "";
 
             if (!location) {
+                location = firstText([
+                    ".pv-text-details__left-panel span.text-body-small.inline",
+                    ".pv-text-details__left-panel span.text-body-small",
+                    ".text-body-small.inline"
+                ], headerSection);
+            }
+
+            if (!looksLikeLocation(location)) {
                 location = lines.find(line =>
                     line !== name &&
                     line !== headline &&
-                    /(^|\b)(india|united states|usa|united kingdom|canada|germany|sweden|australia|singapore)\b/i.test(line)
+                    looksLikeLocation(line)
                 ) || "";
             }
 
             const headerText = headerSection?.innerText || "";
             const activitySection = [...document.querySelectorAll("main section")]
+                .filter(isProfileSection)
                 .find(section => /^Activity\b/i.test(clean(section.querySelector("h2, h3")?.innerText || "")));
             const activityText = activitySection?.innerText || "";
             const followersMatch = (headerText + "\n" + activityText).match(/([\d,]+)\s+followers/i);
@@ -111,12 +196,18 @@ async function extractHeader(page) {
                 name,
                 headline,
                 current_company: currentCompany,
-                position: headline,
+                position: derivePosition(headline, currentCompany),
                 location,
-                followers: followersMatch ? followersMatch[1].replace(/,/g, "") : "",
-                connections: connectionsMatch ? connectionsMatch[1].replace(/,/g, "") : ""
+                followers: followersMatch ? followersMatch[0] : null,
+                connections: connectionsMatch ? connectionsMatch[0] : null
             };
         });
+
+        return {
+            ...header,
+            followers: normalizeNumericField(header.followers),
+            connections: normalizeNumericField(header.connections)
+        };
     } catch (err) {
         return {
             name: "",
@@ -124,8 +215,8 @@ async function extractHeader(page) {
             current_company: "",
             position: "",
             location: "",
-            followers: "",
-            connections: ""
+            followers: null,
+            connections: null
         };
     }
 }
@@ -158,5 +249,6 @@ module.exports = {
     extractName,
     extractHeadline,
     extractCompany,
-    extractLocation
+    extractLocation,
+    derivePositionFromHeadline
 };

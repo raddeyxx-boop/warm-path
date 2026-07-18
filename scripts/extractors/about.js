@@ -7,6 +7,7 @@ async function extractAbout(page) {
                 .trim();
 
             const section = [...document.querySelectorAll("main section")]
+                .filter(candidate => !candidate.closest("aside"))
                 .find(candidate => /^About$/i.test(clean(
                     candidate.querySelector("h2, h3")?.innerText ||
                     candidate.querySelector("[aria-hidden='true']")?.innerText
@@ -20,7 +21,7 @@ async function extractAbout(page) {
 
             clone.querySelectorAll("h1, h2, h3, button, svg, img").forEach(element => {
                 element.remove();
-            });
+            }); 
 
             return clean((clone.innerText || "")
                 .split(/\n+/)

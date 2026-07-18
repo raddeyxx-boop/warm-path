@@ -1,7 +1,8 @@
-const { execFile } = require("child_process");
+const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const express = require("express");
+const { createStartSearchHandler } = require("./services/search-api");
 
 const app = express();
 
@@ -17,6 +18,47 @@ const MUTUAL_DETAILS = path.join(
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+let activeRun = null;
+
+const DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+];
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map(origin => origin.trim())
+    .filter(Boolean);
+const browserAllowedOrigins = allowedOrigins.length
+    ? allowedOrigins
+    : DEFAULT_ALLOWED_ORIGINS;
+
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+
+    if (origin && browserAllowedOrigins.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    }
+
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+    }
+
+    return next();
+});
+
+function readBearerToken(req) {
+    const authorization = req.headers.authorization || "";
+    const [scheme, token] = authorization.split(/\s+/);
+
+    if (scheme?.toLowerCase() !== "bearer" || !token) {
+        return "";
+    }
+
+    return token;
+}
 
 app.get("/", (req, res) => {
     res.json({
@@ -37,18 +79,44 @@ app.get("/health", (req, res) => {
     });
 });
 
+app.post("/api/searches/start", createStartSearchHandler());
+
 app.post("/run", async (req, res) => {
     try {
         const {
             target,
             company = "",
-            url = ""
+            url = "",
+            owner_user_id: ownerUserId = ""
         } = req.body;
+        const accessToken = readBearerToken(req);
 
         if (!target || target.trim() === "") {
             return res.status(400).json({
                 success: false,
                 message: "Target name is required."
+            });
+        }
+
+        if (!ownerUserId) {
+            return res.status(401).json({
+                success: false,
+                message: "You must be signed in before starting a workflow."
+            });
+        }
+
+        if (!accessToken) {
+            return res.status(401).json({
+                success: false,
+                message: "Your session is missing an access token. Please sign in again."
+            });
+        }
+
+        if (activeRun) {
+            return res.status(409).json({
+                success: false,
+                message: "A scraper run is already active.",
+                started_at: activeRun.startedAt
             });
         }
 
@@ -60,6 +128,7 @@ app.post("/run", async (req, res) => {
         console.log("Target  :", target);
         console.log("Company :", company || "Not provided");
         console.log("URL     :", url || "Not provided");
+        console.log("Owner   :", ownerUserId);
         console.log("========================================");
 
         /// ----------------------------
@@ -69,43 +138,51 @@ app.post("/run", async (req, res) => {
 console.log("========== STEP 1 ==========");
 console.log("Starting index.js...");
 
-await new Promise((resolve, reject) => {
+const args = [INDEX, target];
 
-    execFile(
-        process.execPath,
-        [
-            INDEX,
-            target,
-            url,
-            company
-        ],
-        {
-            cwd: ROOT
-        },
-        (error, stdout, stderr) => {
+if (url) {
+    args.push(url);
 
+    if (company) {
+        args.push(company);
+    }
+} else if (company) {
+    args.push(company);
+}
+
+activeRun = {
+    startedAt: new Date().toISOString(),
+    target
+};
+
+try {
+    await new Promise((resolve, reject) => {
+        const child = spawn(process.execPath, args, {
+            cwd: ROOT,
+            env: {
+                ...process.env,
+                OWNER_USER_ID: ownerUserId,
+                SUPABASE_ACCESS_TOKEN: accessToken
+            },
+            stdio: ["ignore", "inherit", "inherit"]
+        });
+
+        child.on("error", reject);
+        child.on("close", code => {
             console.log("========== STEP 2 ==========");
             console.log("index.js finished.");
 
-            if (stdout) {
-                console.log(stdout);
+            if (code === 0) {
+                resolve();
+                return;
             }
 
-            if (stderr) {
-                console.error(stderr);
-            }
-
-            if (error) {
-                console.error(error);
-                return reject(error);
-            }
-
-            resolve();
-
-        }
-    );
-
-});
+            reject(new Error("index.js exited with code " + code));
+        });
+    });
+} finally {
+    activeRun = null;
+}
 
 console.log("========== STEP 3 ==========");
 console.log("Reading mutual-details.json...");  
@@ -146,7 +223,8 @@ app.use((req, res) => {
     });
 });
 
-app.listen(PORT, () => {
+function startServer() {
+return app.listen(PORT, () => {
     console.log("");
     console.log("========================================");
     console.log(" LinkedIn Warm Path Finder API");
@@ -154,5 +232,13 @@ app.listen(PORT, () => {
     console.log(` Server : http://localhost:${PORT}`);
     console.log(` Health : http://localhost:${PORT}/health`);
     console.log(` Run API: POST http://localhost:${PORT}/run`);
+    console.log(` Search API: POST http://localhost:${PORT}/api/searches/start`);
     console.log("========================================");
 });
+}
+
+module.exports = { app, startServer };
+
+if (require.main === module) {
+    startServer();
+}

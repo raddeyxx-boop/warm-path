@@ -9,6 +9,9 @@ const {
     normalizeProfileUrl,
     parsePositiveInteger
 } = require('../services/scrape-utils');
+const {
+    writeJsonAtomicSync
+} = require('../utils/JsonFileStore');
 
 const rootDir = path.join(__dirname, '..');
 const dataDir = path.join(rootDir, 'data');
@@ -96,12 +99,22 @@ function readJsonFile(filePath, fallback) {
 }
 
 function writeJsonFile(filePath, value) {
-    fs.writeFileSync(filePath, JSON.stringify(value, null, 2) + '\n', 'utf8');
+    writeJsonAtomicSync(filePath, value);
 }
 
 function readMutualUrls() {
     return readJsonFile(mutualsPath, [])
-        .map(url => normalizeProfileUrl(url))
+        .map(value => {
+            if (typeof value === 'string') {
+                return normalizeProfileUrl(value);
+            }
+
+            if (value && typeof value === 'object') {
+                return normalizeProfileUrl(value.linkedin_url || value.url);
+            }
+
+            return '';
+        })
         .filter(Boolean);
 }
 

@@ -5,16 +5,19 @@
   "main": "index.js",
   "scripts": {
     "n8n": "node scripts/n8n-server.js",
+    "classify-roles": "node scripts/role-classifier.js",
     "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-js.ps1",
-    "test": "npm run check"
+    "test": "npm run check && node tests/validation-tests.js && node tests/experience-extractor-tests.js && node tests/search-api-tests.js && node tests/playwright-search-runner-tests.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.7",
     "axios": "^1.18.1",
     "csv-parser": "^3.2.1",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "playwright": "^1.61.1"
   }

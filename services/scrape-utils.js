@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const { sleep } = require('../utils/delay');
+const {
+  writeJsonAtomicSync
+} = require('../utils/JsonFileStore');
 
 const CACHE_FOLDER = path.resolve(__dirname, '../data');
 const BLOCKED_STATUS_CODES = new Set([401, 403, 429, 503, 999]);
@@ -39,7 +42,7 @@ function saveCache(cache, cacheName = 'profile-cache') {
   const filePath = cachePath(cacheName);
 
   try {
-    fs.writeFileSync(filePath, JSON.stringify(cache, null, 2) + '\n', 'utf8');
+    writeJsonAtomicSync(filePath, cache);
   } catch (err) {
     console.warn(`Unable to save cache ${cacheName}:`, err.message);
   }

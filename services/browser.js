@@ -7,7 +7,7 @@ const LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/";
 
 const DEFAULT_OPTIONS = {
     channel: "chrome",
-    headless: false,
+    headless: process.env.PLAYWRIGHT_HEADLESS === "true" || process.env.NODE_ENV === "production",
     slowMo: 150,
     viewport: {
         width: 1366,
@@ -57,6 +57,19 @@ async function assertLinkedInAuthenticated(page, navigationTimeout) {
             "Refresh it by running `node scripts/login.js`."
         );
     }
+
+    const hasLinkedInShell = await page.locator("main").isVisible({
+        timeout: 8000
+    }).catch(() => false);
+    const hasSearch = await page.locator('input[placeholder*="Search"]').isVisible({
+        timeout: 3000
+    }).catch(() => false);
+
+    if (!hasLinkedInShell || !hasSearch) {
+        throw new Error(
+            "LinkedIn session loaded but the authenticated app shell was not available."
+        );
+    }
 }
 
 async function startBrowser(options = {}) {
@@ -85,7 +98,9 @@ async function startBrowser(options = {}) {
 });
         const context = await browser.newContext({
             storageState: sessionPath,
-viewport: null,
+            viewport: config.contextOptions?.viewport === undefined
+                ? null
+                : config.contextOptions.viewport,
             ...(config.contextOptions || {})
         });
 
