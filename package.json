@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
  "scripts": {
-  "start": "node -r dotenv/config server.js",
+ "start": "node -r dotenv/config scripts/restore-linkedin-session.js && node -r dotenv/config server.js",
   "frontend": "npm --prefix dashboard run dev",
   "dev": "concurrently --kill-others-on-fail --names BACKEND,FRONTEND \"npm start\" \"npm run frontend\"",
   "n8n": "node scripts/n8n-server.js",

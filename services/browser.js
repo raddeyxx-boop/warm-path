@@ -29,6 +29,37 @@ const PROFILE_MENU_SELECTOR = [
     'button[aria-label*="profile" i]',
     '[data-control-name="identity_profile_photo"]'
 ].join(", ");
+
+const context = await browser.newContext({
+    ...(config.contextOptions || {}),
+    storageState: sessionPath,
+    viewport: { width: 1440, height: 900 }
+});
+
+
+
+const linkedInCookies = await context.cookies("https://www.linkedin.com");
+
+const requiredCookieNames = ["li_at", "JSESSIONID"];
+
+console.log("[LINKEDIN_SESSION_DIAGNOSTIC]", {
+    session_path: sessionPath,
+    total_cookies: linkedInCookies.length,
+    cookie_names: linkedInCookies.map(cookie => cookie.name),
+    required_cookies_found: requiredCookieNames.filter(name =>
+        linkedInCookies.some(cookie =>
+            cookie.name === name && Boolean(cookie.value)
+        )
+    ),
+    required_cookies_missing: requiredCookieNames.filter(name =>
+        !linkedInCookies.some(cookie =>
+            cookie.name === name && Boolean(cookie.value)
+        )
+    )
+});
+
+const page = await context.newPage();
+
 const SIGN_IN_FORM_SELECTOR = [
     'form[action*="login" i]',
     'input[name="session_key"]',
