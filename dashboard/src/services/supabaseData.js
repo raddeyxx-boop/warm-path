@@ -511,27 +511,11 @@ export async function getWorkflowRunById(id) {
 export async function getCandidatesForRun(runId) {
   const client = ensureClient()
   const owner = await authenticatedOwnerId(client)
-  const fields = ['workflow_run_id', 'run_id']
-
-  for (const field of fields) {
-    const { data, error } = await client
-      .from('ranked_candidates')
-      .select('*')
-      .eq('owner_user_id', owner)
-      .eq(field, runId)
-      .not('id', 'is', null)
-      .not('name', 'is', null)
-      .neq('name', '')
-      .neq('name', 'Not available')
-      .not('linkedin_url', 'is', null)
-      .neq('linkedin_url', '')
-      .neq('linkedin_url', 'Not available')
-      .order('rank', { ascending: true })
-
-    const validRows = filterValidCandidateRows(data)
-    if (!error && validRows.length) return { data: validRows.map(normalizeCandidateDisplay), field }
-  }
-
+const result = await client
+  .from('ranked_candidates')
+  .select('*')
+  .eq('owner_user_id', ownerUserId)
+  .eq('workflow_run_id', workflowRunId)
   return { data: [], field: null }
 }
 
