@@ -3,13 +3,16 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "n8n": "node scripts/n8n-server.js",
-    "classify-roles": "node scripts/role-classifier.js",
-    "inspect:n8n": "node scripts/inspect-n8n-execution.js",
-    "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-js.ps1",
-    "test": "npm run check && node tests/validation-tests.js && node tests/classified-candidate-contract-tests.js && node tests/experience-extractor-tests.js && node tests/mutual-parent-navigation-tests.js && node tests/browser-lifecycle-tests.js && node tests/search-api-tests.js && node tests/playwright-search-runner-tests.js && node tests/target-opening-production-path-tests.js && node tests/linkedin-suggestion-selection-tests.js && node tests/n8n-webhook-client-tests.js && node tests/inspect-n8n-execution-tests.js && node tests/playwright-actions-tests.js && node tests/search-recovery-tests.js && node tests/workflow-stop-tests.js && node tests/workflow-delete-tests.js && node tests/relationship-ranking-tests.js"
-  },
+ "scripts": {
+  "start": "node -r dotenv/config server.js",
+  "frontend": "npm --prefix dashboard run dev",
+  "dev": "concurrently --kill-others-on-fail --names BACKEND,FRONTEND \"npm start\" \"npm run frontend\"",
+  "n8n": "node scripts/n8n-server.js",
+  "classify-roles": "node scripts/role-classifier.js",
+  "inspect:n8n": "node scripts/inspect-n8n-execution.js",
+  "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-js.ps1",
+  "test": "..."
+},
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -23,6 +26,7 @@
     "playwright": "^1.61.1"
   },
   "devDependencies": {
+    "concurrently": "^10.0.4",
     "supabase": "^2.109.1"
   }
 }

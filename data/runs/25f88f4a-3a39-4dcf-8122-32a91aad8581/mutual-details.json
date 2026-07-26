@@ -1,0 +1,2102 @@
+[
+  {
+    "name": "Arun Rajan",
+    "linkedin_url": "https://www.linkedin.com/in/arun-rajan-117556118/",
+    "headline": "Software Engineer @ Indpro AB | C# & React.js",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a dedicated and passionate C# developer with over 7+ years of experience in the software development industry, I specialize in creating efficient, scalable, and robust applications. My expertise lies in leveraging the power of . NET core and . NET framework to deliver high-quality software solutions that meet the dynamic needs of modern businesses. Top skills. NET Core • React.js • Microsoft SQL Server • C#",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 168,
+    "connections": 164,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2021-10",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "SayG",
+        "title": "Computer Software Specialist",
+        "duration": {
+          "start": "2020-01",
+          "end": "2021-04",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Hindusthan College of Engineering and Technology",
+        "degree": "Bachelor of Technology - BTech",
+        "field_of_study": "Information Technology",
+        "dates": "2013 – 2017",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "C#",
+      "Vue.js"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Uttam kumar Maharana",
+    "linkedin_url": "https://www.linkedin.com/in/uttamkumar-dev/",
+    "headline": "Full Stack Developer | MEAN MERN Specialist | Experienced in MongoDB, PostgreSQL, MySQL, Redux",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a Full Stack Developer with experience as a Programmer Analyst, I bring a unique perspective to building robust and scalable web applications. I have hands-on experience with the MERN stack (MongoDB, Express.js, React.js, Node.js) and other technologies like PostgreSQL, MySQL, Prisma, and Redux for state management. My work spans from developing online surveys with Sawtooth (SSI Web) to building personal projects, including interactive quiz platforms, social media platforms and inventory management tools. Top skillsFull Stack Development (MERN) • Databases: MongoDB, PostgreSQL, MySQL • ORMs: Mongoose, Prisma • State Management: Redux • API Development & Integration",
+    "current_company": "Indpro AB",
+    "position": "Full Stack Developer",
+    "followers": 209,
+    "connections": 207,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-04",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Techsaint Technology Solutions Pvt.Ltd.",
+        "title": "Full Stack Developer",
+        "duration": {
+          "start": "2024-11",
+          "end": "2025-03",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Institute of Management & Information Technology, Cuttack",
+        "degree": "Master's degree",
+        "field_of_study": "Computer Engineering",
+        "dates": "2020 – 2022",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Angular",
+      "Ionic Framework"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Jnanesha V G",
+    "linkedin_url": "https://www.linkedin.com/in/jnanesha-v-g/",
+    "headline": "Accounts executive at Indpro",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "I have 7 years of experience in accounting, GST filling,PT filling, TDS filling, and payroll activities like salary preparation and IT declaration works, calculation of tax and issuing Form 16, and monthly MIS report preparation and presentation to management. Top skillsPayroll • Auditing",
+    "current_company": "Indpro",
+    "position": "Accounts executive",
+    "followers": 87,
+    "connections": 83,
+    "experience": [
+      {
+        "company": "Charted Accountant Consulting Firm",
+        "title": "Accountant",
+        "duration": {
+          "start": "2016-08",
+          "end": "2019-02",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Bangalore University",
+        "degree": "Bachelor of Commerce - BCom",
+        "field_of_study": "Accounting and Finance",
+        "dates": "2013 – 2016",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Personal Income Tax Returns",
+      "Tds"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Ramaprabu G",
+    "linkedin_url": "https://www.linkedin.com/in/ramaprabu/",
+    "headline": "Team lead",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "Team lead",
+    "followers": 26,
+    "connections": 26,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Team Lead",
+        "duration": {
+          "start": "2005-11",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [],
+    "skills": [],
+    "technologies": []
+  },
+  {
+    "name": "Amitha Shenoy",
+    "linkedin_url": "https://www.linkedin.com/in/amitha-shenoy-95672817/",
+    "headline": "Sr Software Engineer at Indpro AB | .NET Core | Microservices | Event-Driven Architecture | REST APIs | Clean Architecture",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Senior Software Engineer with 10+ years of experience designing, developing, and supporting enterprise applications using C#, . NET Core, REST APIs, and microservices-based architectures. Experienced in end to-end feature ownership, technical design discussions, code reviews, production support, and backend system architecture. Technical Interests:• . NET Core / ASP. NET Core• Microservices• Event-Driven Architecture• RabbitMQ & MassTransit• Azure Functions• SignalR• Clean Architecture• REST APIsTop skillsMicroservices • REST APIs • . NET Core • C# • RabbitMQ",
+    "current_company": "Indpro AB",
+    "position": "Sr Software Engineer",
+    "followers": 185,
+    "connections": 179,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2019-06",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Senior Software Engineer",
+        "duration": {
+          "start": "2024-08",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Visvesvaraya Technological University",
+        "degree": "Bachelor of Engineering (BE)",
+        "field_of_study": "Computer Science",
+        "dates": "2004 – 2008",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "RabbitMQ",
+      "Microservices"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Sureshkumar Ramasamy",
+    "linkedin_url": "https://www.linkedin.com/in/sureshkumar79/",
+    "headline": "Project Leader at Indpro and CSM certified scrum professional",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Experienced IT professional with a strong passion for coding and a deep commitment to continuous learning. I bring extensive expertise across the full software development life cycle — from requirements gathering and architectural design to development, testing, deployment, and support. Proficient in a range of technologies including . NET, Azure, ReactJS, and SQL Server, with a focus on building scalable, high-performance applications. Adept at setting up and managing CI/CD pipelines, ensuring efficient and reliable delivery. A Certified Scrum Master, I have successfully led Agile teams using the Scrum framework, promoting collaboration, transparency, and iterative development. As a supportive leader, I prioritize team growth and mentoring, helping team members reach their full potential. With strong logical thinking, excellent problem-solving skills, and a customer-centric mindset, I consistently deliver high-quality solutions that align with business goals. My enthusiasm for new technologies drives me to stay current and continuously improve both personally and professionally.",
+    "current_company": "Indpro AB",
+    "position": "Project Leader",
+    "followers": 268,
+    "connections": null,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Project Manager",
+        "duration": {
+          "start": "2007-04",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Bharathiar University",
+        "degree": "Master of Computer Applications (MCA)",
+        "field_of_study": "Computer Science",
+        "dates": "1997 – 2000",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Microsoft Azure",
+      "Continuous Integration (CI)"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Dhanush Kumar M",
+    "linkedin_url": "https://www.linkedin.com/in/dhanush-kumar-m-942960233/",
+    "headline": "Software Engineer | Front-End & Back-End Development | React, Svelte, TypeScript, Node.js | AWS",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a Software Engineer with hands-on experience in both front-end and back-end development, I thrive on building scalable, high-performance web applications. Currently, I am working at Indpro AB, a Swedish company, where I collaborate directly with clients on live production systems. My skill set spans across React, Svelte, TypeScript, and Node.js, enabling me to create dynamic, responsive web interfaces and develop robust server-side applications. Key Highlights: Performance Optimization: Reduced application load times by 50% through code optimization and efficient database queries. Full-Stack Development: Expertise in building RESTful APIs and deploying applications with Node.js and PostgreSQL. Cloud & DevOps: Experience with AWS, Docker, and CI/CD pipelines to streamline deployment and hosting. Collaboration & Agile: Actively participating in Agile workflows, managing sprint cycles, and collaborating with cross-functional teams to deliver high-quality production-ready applications. Integrated external APIs from third-party providers to add payment processing, authentication, and data analytics featuresI am passionate about coding standards, collaborative problem-solving, and continuously improving my skills through team collaboration and feedback loops. I am always seeking new opportunities to solve complex problems, optimize user experiences, and contribute to the success of any project I am a part of. Let's connect if you’re looking for a dedicated professional who blends precision with passion.",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 789,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2024-08",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Part-Time Developer",
+        "duration": {
+          "start": "2024-06",
+          "end": "2024-07",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Intern",
+        "duration": {
+          "start": "2024-04",
+          "end": "2024-06",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ms Ramaiah College Of Arts Science and Commerce",
+        "degree": "BCA",
+        "field_of_study": "Computer Software Engineering",
+        "dates": "2021 – Apr 2024",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Full-Stack Development",
+      "TypeScript"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Vinothkumar Subramani",
+    "linkedin_url": "https://www.linkedin.com/in/vinothkumar-subramani-6b718975/",
+    "headline": "Team Lead | Engineering Manager | Scrum Master",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "With over a decade at Indpro, my journey from a fresher to a Development Team Lead has been marked by a relentless pursuit of excellence in . Net web development. The team's collaborative efforts have resulted in efficient, user-friendly web applications, leveraging my proficiency in React.js and Agile methodologies. My role has evolved to encompass not just technical expertise but also strategic client communication and leadership within our projects. With certifications in Generative AI and expertise in Azure Cosmos DB, I am committed to driving innovation and fostering an environment that empowers our team to excel in delivering cutting-edge solutions.",
+    "current_company": "Indpro AB",
+    "position": "Team Lead",
+    "followers": 593,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Engineering Manager",
+        "duration": {
+          "start": "2022-05",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Senior Software Engineer",
+        "duration": {
+          "start": "2011-06",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Anna University Chennai",
+        "degree": "Bachelor of Engineering (B.E.)",
+        "field_of_study": "Computer Science",
+        "dates": "2007 – 2011",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Microsoft Certified: Azure Developer Associate",
+      "Upgrad CSM course completion PDU certificate",
+      "Scrum Master Certified (SMC)"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Varun Mahesh",
+    "linkedin_url": "https://www.linkedin.com/in/varun-mahesh-a0a8271a0/",
+    "headline": "Cyber Security & Networking Engineer || CCNA || CCNP || Ethical Hacker || CPT || CEH ||",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Rooman Technologies Pvt Ltd",
+    "position": "Cyber Security & Networking Engineer || CCNA || CCNP || Ethical Hacker || CPT || CEH ||",
+    "followers": 669,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Rooman Technologies Pvt Ltd",
+        "title": "Cisco & Cyber security",
+        "duration": {
+          "start": "2024-10",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Software Programmer",
+        "duration": {
+          "start": "2024-06",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "BCA",
+        "field_of_study": "Computer Science",
+        "dates": "Nov 2021 – Oct 2024",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "OWASP ZAP",
+      "Acunetix"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Dilip Rayguru",
+    "linkedin_url": "https://www.linkedin.com/in/diliprayguru/",
+    "headline": "Senior Software Engineer",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "Senior Software Engineer",
+    "followers": 470,
+    "connections": 449,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "SSE",
+        "duration": {
+          "start": "2016-07",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Cinemacraft Inc",
+        "title": "SSE",
+        "duration": {
+          "start": "2015-04",
+          "end": "2016-07",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "STUDYeBUDDY",
+        "title": "Senior Developer",
+        "duration": {
+          "start": "2014-09",
+          "end": "2015-03",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Wcities",
+        "title": "ios developer",
+        "duration": {
+          "start": "2013-07",
+          "end": "2014-09",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Kendriya Vidyalaya",
+        "degree": "",
+        "field_of_study": "",
+        "dates": "1994 – 2005",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "iPhone",
+      "iOS"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "J Nagavardhan Reddy",
+    "linkedin_url": "https://www.linkedin.com/in/jnvreddy/",
+    "headline": "Android Developer | Native Android (Kotlin, Jetpack Compose) | Java/XML",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Android developer with a strong focus on native Android development and long-term maintainability. I enjoy working close to the platform, understanding how systems behave under real constraints, and improving code incrementally rather than relying on quick fixes. In my current role, I work on a production Android application built on Java/XML, contributing to feature development, Firebase-related issues, and bug fixes. Alongside regular maintenance and bug fixes, I migrate legacy components to Kotlin and refactor the codebase as part of active feature development and production releases, gradually adopting modern Android UI approaches using Jetpack Compose and state-driven UI patterns where it provides measurable value. I’ve also mentored interns, supported the onboarding of freshers, and evaluated candidates through technical interviews, which has strengthened my communication skills, code review approach, and ability to reason about technical trade-offs within a team environment. While I’ve had exposure to full-stack projects and backend systems, my primary strength and interest remain Android-native development. I’m currently deepening my expertise in Jetpack Compose and exploring Kotlin Multiplatform (KMP) to share business logic across platforms while maintaining platform-native UI for Android and iOS, without compromising user experience or performance. Top skillsAndroid Development • Kotlin • Java • Leadership • Problem Solving",
+    "current_company": "Indpro AB",
+    "position": "Android Developer",
+    "followers": 262,
+    "connections": 260,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-02",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2024-12",
+          "end": "2025-01",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Full-stack Developer",
+        "duration": {
+          "start": "2024-10",
+          "end": "2024-11",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "SAFEPRO AI VIDEO RESEARCH LABS PVT. LTD.",
+        "title": "Computer Vision Developer",
+        "duration": {
+          "start": "2024-01",
+          "end": "2024-06",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "Bachelor of Computer Application - BCA",
+        "field_of_study": "Computer Science",
+        "dates": "Nov 2021 – Sep 2024",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "MongoDB",
+      "Next.js"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Alwandi Kavana",
+    "linkedin_url": "https://www.linkedin.com/in/alwandi-kavana/",
+    "headline": "Full stack developer",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "Full stack developer",
+    "followers": 131,
+    "connections": 130,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-06",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Full Stack Developer",
+        "duration": {
+          "start": "2025-03",
+          "end": "2025-05",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Full Stack Engineer",
+        "duration": {
+          "start": "2025-01",
+          "end": "2025-03",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Dr. Ambedkar Institute Of Technology",
+        "degree": "Bachelor of Engineering - BE",
+        "field_of_study": "Computer science engineering",
+        "dates": "2021 – 2025",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Full-Stack Development"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Boddupally Praneeth",
+    "linkedin_url": "https://www.linkedin.com/in/boddupally-praneeth/",
+    "headline": "Software Engineer | Full stack developer",
+    "location": "Hyderabad, Telangana, India",
+    "about": "💻 Software Engineer | Backend Developer | Node.js | Express.js | MySQL | FinTech I’m a results-driven backend developer with 1+ year of experience building scalable and secure backend systems, primarily in the FinTech domain. In my recent role as a Software Engineer, I worked extensively with Node.js, Express.js, Redis and MySQL to develop and maintain backend services that supported real-time financial applications. Beyond coding, I actively contributed to team success by: Leading sprints: defining sprint goals, assigning tasks, and ensuring timely delivery. Conducting code reviews to maintain code quality and knowledge sharing. Sprint planning: coordinating with team members to estimate timelines and deliverables. I'm now looking for opportunities as a Backend Engineer/Developer, where I can deepen my backend expertise, contribute to impactful projects, and collaborate with dynamic teams. Let’s connect if you’re building something exciting — I’d love to be a part of it.",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 732,
+    "connections": null,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2025-08",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Certainti.AI",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2024-02",
+          "end": "2025-02",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "CMR College of Engineering & Technology",
+        "degree": "Bachelor of Technology - BTech",
+        "field_of_study": "Computer Science and Engineering",
+        "dates": "2017 – 2021",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Narayana Junior College - India",
+        "degree": "MPC",
+        "field_of_study": "",
+        "dates": "2015 – 2017",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Redis",
+      "Database Design"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Prajwal Prabhugowda Gowdra",
+    "linkedin_url": "https://www.linkedin.com/in/prajwal-prabhugowda-gowdra-21bb31205/",
+    "headline": "Full Stack Developer | Software Engineer | JavaScript, React, Node.js Expert | 2+ Years Experience in Web & Mobile App Development",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "\"Results-oriented Full Stack Software Engineer with 2+ years of experience in developing high-performance web and mobile applications. Adept at using front-end (React, AngularJS) and back-end (Node.js, MongoDB) technologies to create scalable, secure software solutions. Skilled in Agile methodologies, cloud databases (AWS, MongoDB), and cross-functional collaboration to deliver client-focused results. Passionate about solving complex technical challenges and staying up to date with industry trends. Excited to leverage my expertise in driving innovation across diverse industries including Retail and Healthcare.\"",
+    "current_company": "Indpro AB",
+    "position": "Full Stack Developer",
+    "followers": 313,
+    "connections": 266,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2025-02",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Isipho Technologies Private Limited",
+        "title": "Full Stack Developer",
+        "duration": {
+          "start": "2023-10",
+          "end": "2024-11",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "AlienHu Private Limited",
+        "title": "Full-stack Developer",
+        "duration": {
+          "start": "2022-03",
+          "end": "2023-04",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "KLECET CHIKODI",
+        "degree": "Bachelor of Engineering - BE",
+        "field_of_study": "Computer Science",
+        "dates": "2018 – 2022",
+        "activities": "Kabbaddi, Running, Volleyball",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "E2E",
+      "Next.js"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Dhaya Duraisamy",
+    "linkedin_url": "https://www.linkedin.com/in/dhaya-duraisamy-52644524/",
+    "headline": "Team lead at Indpro AB | Mobile app development - iOS, Android, React-Native | Front-end development - React.js, Angular, Javascript.",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Mobile application developer with 8+ years of experience, primarily in iOS. Frontend developer with 1+ years of experience in React.js and Angular. Seeking a challenging environment gives continuous learning, creativity, and exposure to advanced technology that provides personal and professional growth. SKILLS: Swift, Objective C, Kotlin, iOS, Android. HTML, CSS, Javascript, Typescript, React.js, Angular. Cocca touch, CocoaPods. Database: SQLite & Core data. Architecture: MVC, MVVM. Authentication: ForgeRock, Azure & Local Authentication. APNs, FCMBeacons (Bluetooth Low Energy) DeviceSignalr, Multipeer Connectivity (Bluetooth & wifi)JIRA, Firebase, Fabric, Hockey app. Version Handling: GITTop skillsiOS Development • Android Development • React.js • Angular • JavaScript",
+    "current_company": "Indpro AB",
+    "position": "Team lead",
+    "followers": 575,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Mobile Application Developer",
+        "duration": {
+          "start": "2018-10",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "iOS App Developer",
+        "duration": {
+          "start": "2014-10",
+          "end": "2018-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "ctsIT.com",
+        "title": "Senior Software Engineer",
+        "duration": {
+          "start": "2013-12",
+          "end": "2014-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Yakshna Technologies",
+        "title": "Technical Consultant",
+        "duration": {
+          "start": "2010-07",
+          "end": "2013-11",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Annai Mathammal Sheela Engineering College",
+        "degree": "Bachelor of Engineering - BE",
+        "field_of_study": "Electrical and Electronics Engineering",
+        "dates": "2006 – 2010",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Bharathiar University",
+        "degree": "Master of Business Administration (MBA)",
+        "field_of_study": "Human Resources Management and Services",
+        "dates": "2012 – 2014",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "iOS Development",
+      "Android Development"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Moumita Sen",
+    "linkedin_url": "https://www.linkedin.com/in/moumita-sen-018b28a3/",
+    "headline": "Software Engineer | Backend Engineer | Java | Spring Boot | Microservices | PostgreSQL | Azure | AI-Driven Enterprise Platforms",
+    "location": "Kolkata, West Bengal, India",
+    "about": "Backend Engineer with 5+ years of experience designing and developing scalable enterprise applications using Java, Spring Boot, and Microservices architecture. I specialize in building RESTful APIs, distributed systems, authentication and authorization solutions, AI-integrated platforms, and cloud-based applications. Currently working on Attano, an AI-driven employee assessment platform where I contribute to backend architecture, microservices development, Azure AD integration, notification systems, scheduling workflows, and AI-powered analytics. My technical expertise includes: • Java • Spring Boot • Microservices • PostgreSQL • Azure • Docker • JWT & OAuth2 • WebSocket • REST APIs • Distributed Systems I enjoy solving complex backend challenges, optimizing system performance, and designing scalable solutions that create business impact.",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 1358,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2025-03",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Bandhan Bank",
+        "title": "Back End Developer",
+        "duration": {
+          "start": "2021-12",
+          "end": "2025-03",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "eDot Health",
+        "title": "Full Stack Developer",
+        "duration": {
+          "start": "2021-08",
+          "end": "2021-11",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Xygrow Technology Private limited",
+        "title": "Developer",
+        "duration": {
+          "start": "2020-09",
+          "end": "2021-07",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Computer Software Solutions LLC",
+        "title": "Frontend Web Developer",
+        "duration": {
+          "start": "2019-08",
+          "end": "2020-02",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "St. Xavier's College (Autonomous), Kolkata",
+        "degree": "MSc",
+        "field_of_study": "Computer Science",
+        "dates": "2018 – 2020",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Front-End Design",
+      "CodeIgniter"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Aashijit Mukhopadhyay",
+    "linkedin_url": "https://www.linkedin.com/in/aashijit-mukhopadhyay/",
+    "headline": "Engineering Lead | AI-Driven Development | Building Scalable Systems at Indpro AB",
+    "location": "Kolkata, West Bengal, India",
+    "about": "I’m an engineer by practice and a builder by instinct. My approach has always been hands-on — designing, coding, architecting, and deploying systems that actually work in the real world. At Indpro AB, I lead engineering with a simple but powerful philosophy: clarity in architecture, speed in execution, and intelligence in every layer of development. Over the years, I’ve led and contributed to dozens of projects — each with unique challenges in scale, performance, and scope. My experience has taught me how to take large, undefined ideas and translate them into well-structured, actionable roadmaps — from initial architecture design and scope breakdowns to final deployment and optimization. I don’t just hand over specs — I create them. I map out the technical blueprints, define key dependencies, design system flows, and if needed, jump into the codebase to get critical pieces done. Whether it’s backend logic, UI/UX refinements, or infrastructure automation, I work end-to-end to make sure everything connects seamlessly. A big part of my role is enabling teams — not just managing them. I’m deeply committed to AI-driven development, where we integrate AI tools and frameworks into our workflows to supercharge engineering velocity and creativity. I help teams adopt agentic coding practices, use AI to accelerate decision-making, automate repetitive tasks, and ultimately, build smarter and faster. In practice, this means: Architecting scalable systems — from cloud-native microservices to distributed AI-based platforms. Designing clean, modular scopes that make complex builds manageable and measurable. Coding hands-on when precision, speed, or proof of concept matters. Integrating UX thinking early in the engineering process to make products intuitive and human-centric. Deploying and maintaining infrastructure, ensuring smooth CI/CD pipelines and high system reliability. Mentoring teams to build with intent, use AI creatively, and deliver on ambitious goals with clarity and confidence. Every project is a chance to build something meaningful — not just software, but smarter systems that help people and businesses do more with less friction. At Indpro, I stand for a new kind of engineering mindset — where technology and intelligence evolve together, where ideas move fast, and where we don’t wait for the future of AI-first development — we build it. Top skillsAgile Methodologies • Amazon Web Services (AWS) • Software Architecture • Agent AI • Software Development",
+    "current_company": "Indpro AB",
+    "position": "Engineering Lead",
+    "followers": 813,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Engineering Lead",
+        "duration": {
+          "start": "2025-11",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Senior Software Engineer",
+        "duration": {
+          "start": "2021-11",
+          "end": "2025-11",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Furhat Robotics",
+        "title": "Technical Lead",
+        "duration": {
+          "start": "2024-12",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "eDot Health",
+        "title": "General Manager",
+        "duration": {
+          "start": "2021-01",
+          "end": "2021-11",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "eDot Health",
+        "title": "Developer",
+        "duration": {
+          "start": "2018-10",
+          "end": "2021-01",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Computer Software Solutions LLC",
+        "title": "Android Development Intern",
+        "duration": {
+          "start": "2018-01",
+          "end": "2018-01",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "St. Xavier's College (Autonomous), Kolkata",
+        "degree": "Master's degree",
+        "field_of_study": "Computer Science",
+        "dates": "2016 – 2018",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "St. Xavier's College (Autonomous), Kolkata",
+        "degree": "Bachelor's degree",
+        "field_of_study": "Computer Science",
+        "dates": "2013 – 2016",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Software Architecture",
+      "Agent AI"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Rutik Kulkarni",
+    "linkedin_url": "https://www.linkedin.com/in/rutikkulkarni/",
+    "headline": "Software Engineer | Ex-Founder | Geektrust Gold 🥇",
+    "location": "Maharashtra, India",
+    "about": "I’m a Full-Stack Software Engineer with nearly 3.6 years of experience designing, developing, and scaling web applications using MERN, Next.js, and TypeScript. Currently at INDPRO (Intelligent Development and Programming Pvt. Ltd.), I work on building and maintaining full-stack solutions, integrating AI-powered automation and optimizing workflows for performance, scalability, and user experience. Previously at Virtusky IT Solutions Pvt. Ltd., I engineered secure, production-grade applications, implemented JWT-based authentication, optimized RESTful APIs, and deployed solutions on AWS using CI/CD practices. With a B. E. in Computer Science (Honors in Data Science), I bring a data-driven approach to software engineering, combining logic, design, and performance. I’m passionate about solving complex problems, exploring AI integrations, and contributing to innovative, high-impact products. Top skillsJavaScript • React.js • Node.js • Java • MongoDB",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 1645,
+    "connections": null,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2025-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Virtusky IT Pvt Ltd",
+        "title": "Software Developer",
+        "duration": {
+          "start": "2023-01",
+          "end": "2025-07",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "GyamaTech",
+        "title": "Founder",
+        "duration": {
+          "start": "2022-02",
+          "end": "2024-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "JTP Co. Ltd.",
+        "title": "Intern",
+        "duration": {
+          "start": "2023-02",
+          "end": "2023-03",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Savitribai Phule Pune University",
+        "degree": "Honors Degree",
+        "field_of_study": "Data Science",
+        "dates": "2021 – 2023",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Savitribai Phule Pune University",
+        "degree": "Bachelor of Engineering - BE",
+        "field_of_study": "Computer Science",
+        "dates": "2019 – 2023",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Start-up Ventures",
+      "Research Collaboration"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Sujoy Ghosh",
+    "linkedin_url": "https://www.linkedin.com/in/sujoy-ghosh2000/",
+    "headline": "Full Stack Web Developer",
+    "location": "Kolkata, West Bengal, India",
+    "about": "A Master's in Computer Science and a Full Stack Web Developer. Really passionate about web development. Always trying to sharpen my skills and constantly exploring new tools and concepts. Love doing a ton of things 🎥🖌️🧩🎮📚♟️",
+    "current_company": "Indpro AB",
+    "position": "Full Stack Web Developer",
+    "followers": 803,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2025-02",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Wellness Connection",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2023-06",
+          "end": "2025-02",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Wellness Connection",
+        "title": "Software Engineer Intern",
+        "duration": {
+          "start": "2022-06",
+          "end": "2023-06",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Whales Network",
+        "title": "React Native Developer",
+        "duration": {
+          "start": "2022-03",
+          "end": "2022-04",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Support Genie",
+        "title": "Software Developer Internship",
+        "duration": {
+          "start": "2021-02",
+          "end": "2021-12",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "St. Xavier's College (Autonomous), Kolkata",
+        "degree": "Master of Science - MS",
+        "field_of_study": "Computer Science",
+        "dates": "Aug 2021 – Jun 2023",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Calcutta University, Kolkata",
+        "degree": "Bachelor of Science - BS",
+        "field_of_study": "Computer Science",
+        "dates": "2018 – 2021",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Azure DevOps Services",
+      "AngularJS"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Renu Gangwar",
+    "linkedin_url": "https://www.linkedin.com/in/renu-gangwar-7570a1128/",
+    "headline": "Business Development Executive @ Indpro AB",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a Business Development Executive at Indpro AB, I work with global clients to provide IT solutions that meet their needs and goals. I have successfully generated and nurtured leads, developed and executed sales strategies, and managed long-term relationships with customers across various industries and regions. With a MBA degree from NERIST and an engineering degree from Anna University, I have a strong background in marketing and computer science, which enables me to understand the technical and business aspects of IT projects. I also have multiple skills in inside sales, market research, and relationship management, which I leverage to create value for both Indpro AB and our clients. I am motivated by the challenge and opportunity of working in a dynamic and competitive industry, where I can apply my open-minded and strategic approach to business development. I believe in delivering innovative and customized solutions that exceed expectations and foster trust and loyalty. My goal is to contribute to Indpro AB's growth and success by expanding our global reach and impact.",
+    "current_company": "Byggmax AB",
+    "position": "Business Development Executive",
+    "followers": 273,
+    "connections": 258,
+    "experience": [
+      {
+        "company": "Byggmax AB",
+        "title": "Consultant",
+        "duration": {
+          "start": "2023-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Business Development Executive",
+        "duration": {
+          "start": "2016-11",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "North Eastern Regional Institute of Science and Technology (NERIST)",
+        "degree": "Master of Business Administration (M.B.A.)",
+        "field_of_study": "Marketing, operations management",
+        "dates": "2014 – 2016",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Anna University Chennai",
+        "degree": "Engineer’s Degree",
+        "field_of_study": "Computer Science",
+        "dates": "2011 – 2014",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Supply Chain Operations",
+      "Warehouse Operations"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Pratika NG",
+    "linkedin_url": "https://www.linkedin.com/in/pratika-ng/",
+    "headline": "Frontend Developer. Currently based in India | Open to relocation | Open to Dubai.",
+    "location": "India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "Frontend Developer. Currently based in India",
+    "followers": 627,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2026-02",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Tata Consultancy Services",
+        "title": "Associate System Engineer",
+        "duration": {
+          "start": "2021-08",
+          "end": "2022-11",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Visvesvaraya Technological University",
+        "degree": "Bachelor's degree",
+        "field_of_study": "Electrical, Electronics and Communications Engineering",
+        "dates": "2017 – 2021",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "MongoDB",
+      "Next.js"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Ramakrishna Kushna",
+    "linkedin_url": "https://www.linkedin.com/in/krk-tech/",
+    "headline": "(Kushna Ramakrishna)",
+    "location": "Technical lead | 20 Years Excellence in .NET Ecosystem & Multi-Cloud (Azure/AWS) | Architecting Scalable Enterprise Systems with C#, ASP.NET, MVC, WebAPI & Microservices | MCSD • CSM • CSPO Certified",
+    "about": "Seasoned software development professional with nearly 2 decades of comprehensiveexperience in designing, architecting, and delivering scalable enterprise applicationswithin the Microsoft technology ecosystem. I excel in building collaborative, high-performing teams and delivering robust, business-aligned solutions that foster organizational growth and success. My technical proficiency spans the Microsoft technology stack, including ASP. NET MVC, . NET Core, C#, Web API, Entity Framework, and SQL Server, enabling me to create high-performance, scalable applications. As a Certified Scrum Master and Product Owner, I bring extensive experience in Scrum and Agile practices, ensuring efficient project delivery and continuous improvement. I have a strong background in implementing CI/CD pipelines using Jenkins, Azure, and AWS, alongside hands-on experience across healthcare, ERP, e-commerce, and banking/finance domains, including on-site exposure in Sweden. Known for excellent team leadership and management skills, I am dedicated to mentoring and guiding teams to achieve their goals and deliver impactful results. Top skills. NET Core • C# WEB API • Full-Stack Development • Microsoft SQL Server • Amazon Web Services (AWS)",
+    "current_company": "Indpro AB",
+    "position": "(Kushna Ramakrishna)",
+    "followers": 373,
+    "connections": 365,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Project Lead",
+        "duration": {
+          "start": "2012-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Team Coordinator",
+        "duration": {
+          "start": "2009-09",
+          "end": "2012-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2006-09",
+          "end": "2009-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Accenture",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2005-10",
+          "end": "2006-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "The Singareni Collieries Company Ltd",
+        "title": "Jr. Programmer",
+        "duration": {
+          "start": "2004-10",
+          "end": "2005-09",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Jawaharlal Nehru Technological University",
+        "degree": "Bachelor of Technology (B.Tech.)",
+        "field_of_study": "Computer Science and Engineering",
+        "dates": "1999 – 2004",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Amazon Web Services (AWS)",
+      "C# WEB API"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Vishnu A",
+    "linkedin_url": "https://www.linkedin.com/in/vishnu-a-20b9ab1ba/",
+    "headline": "Supply chain & logistics Professional @Indpro.se || Consultant @Byggmax || BBA @RCASC || Gym & Fitness trainer || Marketing",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "\"The only way to do great work is to love what you do\" - Steve Jobs• BBA Graduate with expertise in Supply Chain Management & Logistics, currently working on the Byggmax project at IndPro.se across Sweden & Europe. • Passionate about Digital Marketing, exploring innovative ways to enhance brand visibility and engagement. Deep interest in Electronics & Automobiles, constantly following industry advancements and emerging technologies.• A problem-solver with a data-driven mindset, aiming to optimize processes and drive operational efficiency. • Inspired by Kaizen (continuous improvement) and Lean Thinking, applying structured strategies for supply chain excellence. • Believes in \"The 1% Rule\" – small daily improvements lead to long-term success (Atomic Habits by James Clear).",
+    "current_company": "Indpro AB",
+    "position": "Supply chain & logistics Professional @Indpro.se || Consultant @Byggmax || BBA @RCASC || Gym & Fitness trainer || Marketing",
+    "followers": 234,
+    "connections": 233,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Business developer",
+        "duration": {
+          "start": "2025-11",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Supply Chain Management",
+        "duration": {
+          "start": "2024-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Byggmax AB",
+        "title": "Supply Chain Consultant",
+        "duration": {
+          "start": "2024-11",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Samparkisu Private Limited",
+        "title": "Business Support System Specialist",
+        "duration": {
+          "start": "2024-03",
+          "end": "2024-08",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "Bachelor of Business Administration - BBA",
+        "field_of_study": "Business Administration and Management, General",
+        "dates": "Sep 2021 – Sep 2024",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Army Public School (APS)",
+        "degree": "Grade 12th",
+        "field_of_study": "Schooling",
+        "dates": "May 2006 – Nov 2020",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Integrated Supply Chain Management",
+      "Facility Management (FM)"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Debraj Saha",
+    "linkedin_url": "https://www.linkedin.com/in/debraj-saha/",
+    "headline": "Entrepreneur | Freelance Technical Consultant",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "Entrepreneur",
+    "followers": 300,
+    "connections": 291,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "IT Consultant",
+        "duration": {
+          "start": "2008-03",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Indpro",
+        "duration": {
+          "start": "2008-08",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Siddaganga Institute Of Technology",
+        "degree": "Master of Computer Applications - MCA",
+        "field_of_study": "Computer Science",
+        "dates": "Mar 2003 – Mar 2006",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "Bachelor of Science - BS",
+        "field_of_study": "Computer Science",
+        "dates": "Mar 2000 – Mar 2003",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "C#",
+      "Requirements Analysis"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Parvez Ali",
+    "linkedin_url": "https://www.linkedin.com/in/aliparvez20/",
+    "headline": "Senior Software Engineer | React.js · Node.js · ASP.NET Core · Azure | 11+ Years | Open to Opportunities",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Senior Full Stack Engineer with 11+ years of experience delivering scalable web applications across construction tech, e-learning, and enterprise domains. Currently at Indpro (11+ years), leading full-stack development of iBinder — a construction & real estate SaaS platform used across Europe — built on React.js, ASP. NET Core, Node.js, CosmosDB, and Microsoft Azure. I specialise in:→ Full-Stack Architecture (React, Angular, Vue, ASP. NET Core, Node.js)→ Cloud & DevOps (Azure, AWS, CI/CD, Azure DevOps)→ APIs & Data (GraphQL, REST, SQL, MongoDB, Redis, CosmosDB)→ Team Leadership (mentoring, code reviews, Agile/Scrum)→ Clean Code (SOLID, microservices, automated testing)I've delivered projects for clients across Sweden, India, and Europe spanning real estate, alarms, packaging, mapping, and e-learning. Open to Senior Engineer / Tech Lead / Architect roles.📧 aliparvez20@gmail.comTop skills. NET Core • AngularJS • React.js • Node.js • Microsoft Azure",
+    "current_company": "Indpro AB",
+    "position": "Senior Software Engineer",
+    "followers": 619,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2014-06",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Sr. Software Engineer",
+        "duration": {
+          "start": "2014-06",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Sr. Solution Engineer",
+        "duration": {
+          "start": "2010-11",
+          "end": "2012-01",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Senior Solutions Engineer",
+        "duration": {
+          "start": "2010-01",
+          "end": "2012-01",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Haldia Institute of Technology",
+        "degree": "Bachelor of Technology - BTech",
+        "field_of_study": "Electronics and Communications Engineering",
+        "dates": "Aug 2005 – Aug 2009",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Coding Practices",
+      "Database Optimization"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Bhavya Bedi",
+    "linkedin_url": "https://www.linkedin.com/in/bhavyabedi/",
+    "headline": "Full-Stack Engineer · AI Integrations · System Design | React · Next.js · TypeScript · Python · Kafka · AWS | 6 products shipped",
+    "location": "Bangalore Urban, Karnataka, India",
+    "about": "I started in software 18 months ago. Since then I've shipped 6 products: an AI learning platform, a robotics infrastructure platform, an enterprise SaaS, a job portal, internal AI tooling, and more. In that time, I've gone from writing my first production features to leading architecture decisions, client calls, and cross-functional teams. At IndPro AB, a Swedish product company, I work full-stack across React, Next.js, TypeScript, Kotlin, Python, Node.js, PostgreSQL, Redis, Kafka, and AWS. On the AI side, I've built production multi-agent systems using LangGraph, RAG pipelines, and vector databases. Not demos—real workflows used by real organizations. A few things I've owned:• Designed and shipped a multi-agent AI course creation platform (LangGraph orchestration, session tracking, org-scoped token limits)• Took a project that was 4 sprints behind schedule and brought it 80% back on track in 1.5 weeks• Simplified a 3–4 step interview configuration spread across multiple surfaces into a single wizard flow—from a single client conversation• Mapped and documented a multi-repository, previously undocumented robotics codebase spanning C++, Kotlin, Rust, Java, and React• Built a team-wide agentic R&D and planning workflow using Claude agents and skills that reduced planning time and improved code quality across the board I'm PSM I certified, have led client communications with European stakeholders, and have been brought into upper management conversations in Sweden. I document everything I touch. :)Top skillsAgentic AI Development • Project Management • System Architecture • Software Development • DevOps",
+    "current_company": "Indpro AB",
+    "position": "Full-Stack Engineer · AI Integrations · System Design",
+    "followers": 634,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2025-01",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "BCA",
+        "field_of_study": "",
+        "dates": "Oct 2021 – Oct 2024",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Wynberg Allen School",
+        "degree": "ISC",
+        "field_of_study": "",
+        "dates": "",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Continuous Integration and Continuous Delivery (CI/CD)",
+      "Object-oriented Languages"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Tamanna Sharma",
+    "linkedin_url": "https://www.linkedin.com/in/tamanna-sharma-17b890243/",
+    "headline": "QA Engineer | Java | Selenium | Cucumber | TestNG| API| APPIUM| JavaScript | Cypress | Playwright",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "QA Engineer",
+    "followers": 739,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "QA Engineer",
+        "duration": {
+          "start": "2025-08",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "StarAgile",
+        "title": "Internship Trainee",
+        "duration": {
+          "start": "2025-01",
+          "end": "2025-08",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "JoulestoWatts Business Solutions Pvt Ltd",
+        "title": "Technical Support Specialist",
+        "duration": {
+          "start": "2023-03",
+          "end": "2023-08",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Dr YS Parmar University of Horticulture & Forestry, Nauni, Solan",
+        "degree": "Bachelor of Technology",
+        "field_of_study": "",
+        "dates": "2022 – 2022",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Java Fundamentals",
+      "Automation Testing Engineer"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Thaslima Nazrin",
+    "linkedin_url": "https://www.linkedin.com/in/thaslima-nazrin-52b0611b8/",
+    "headline": "171",
+    "location": "Student at Mohamed Sathak Engineering College, Kilakarai",
+    "about": "I'm a graduating student in the field of Civil engineering from a standard engineering college. I wish to work that relates to my core after my graduation.",
+    "current_company": "INDPRO",
+    "position": "171",
+    "followers": 180,
+    "connections": 171,
+    "experience": [
+      {
+        "company": "INDPRO",
+        "title": "Design Engineer",
+        "duration": {
+          "start": "2025-01",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "CADD Centre Training Services Pvt Ltd.",
+        "title": "Technical Trainer",
+        "duration": {
+          "start": "2023-03",
+          "end": "2024-09",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Mohamed Sathak Engineering College",
+        "degree": "Bachelor of Engineering",
+        "field_of_study": "Civil Engineering",
+        "dates": "2018 – 2022",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Technical Drawing",
+      "Legal Writing"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "MOHAMMED UMAIR ANSARI",
+    "linkedin_url": "https://www.linkedin.com/in/umairansari896/",
+    "headline": "Software Engineer",
+    "location": "Karnataka, India",
+    "about": "To work hard and give my best at every point of my career. To work in an innovative environment with dedicated people, which will help me to explore myself fully and realize my potential. To seek an opportunity for continuous learning.",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 831,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2022-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "BIM INFOTECH PRIVATE LIMITED",
+        "title": "BIM Engineer",
+        "duration": {
+          "start": "2017-08",
+          "end": "2019-08",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "SJB Institute of Technology",
+        "degree": "Bachelor of Engineering - BE",
+        "field_of_study": "",
+        "dates": "2014 – 2018",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "TypeScript",
+      "redux"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Sindhu M",
+    "linkedin_url": "https://www.linkedin.com/in/sindhum29/",
+    "headline": "Strategy & Operations Executive @INDPRO AB | Co-Creating HappyRuH | Novice surfer :)",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Strategy & Operations executive at INDPRO AB & Founding member at HappyRuH. Things I think will hep you understand this profile better: • Co-Creating HappyRuH has been my best start-up experience. [Wellness industry is a huge fort that takes a lot to break-in]• Harry potter movies are the best! [After being an adult for just few years; I wish Hogwarts was REAL] • Surfing is such a fun sport & has so much similarities to running a business ;) [Especially the part where you get hit by waves violently but you still get on the board] Top skillsProblem Solving • Negotiation • Teamwork • Communication • Strategic Planning",
+    "current_company": "Indpro AB",
+    "position": "Strategy & Operations Executive @INDPRO AB",
+    "followers": 4454,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Strategy & Operations Executive",
+        "duration": {
+          "start": "2025-02",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Business Operations Manager",
+        "duration": {
+          "start": "2024-08",
+          "end": "2025-02",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "HappyRuH",
+        "title": "Founding Member & Strategist",
+        "duration": {
+          "start": "2024-04",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Global Sustainable Surge",
+        "title": "Co-Founder",
+        "duration": {
+          "start": "2023-10",
+          "end": "2024-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "IIC Coordinator",
+        "duration": {
+          "start": "2023-01",
+          "end": "2024-06",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Placement Coordinator",
+        "duration": {
+          "start": "2023-01",
+          "end": "2023-06",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "NATIONAL CADET CORPS - India",
+        "title": "Cadet Junior Under Officer",
+        "duration": {
+          "start": "2021-11",
+          "end": "2024-03",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "Bachelor of Business Administration - BBA",
+        "field_of_study": "International Business",
+        "dates": "2021 – 2024",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Professional Scrum Master I"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Akash Agrawal",
+    "linkedin_url": "https://www.linkedin.com/in/akash-agrawal-8b6504104/",
+    "headline": "Greater Bengaluru Area",
+    "location": "Software Engineer @ IndPro | Backend Engineer | Java, Spring Boot, Node.js | Microservices, Distributed Systems, System Design | Redis, RabbitMQ, Kafka, CI/CD | Creator of The Engineering Playbook (1.9K+ Subscribers)",
+    "about": "Hey there! I’m a Full-Stack & Backend Developer who enjoys building scalable, high-performance applications that solve real-world problems. I mainly work with the MERN stack, microservices, and DevOps, and I like using modern development practices to build solutions that actually make an impact. I’m also the creator of The Engineering Playbook, a LinkedIn newsletter where I share insights on scalable backend systems, microservices, system design, and DevOps best practices. It crossed 1,000+ subscribers in just 2 days, which has been a great motivation to keep sharing what I learn. What I do best: Scalable Backend Development – Designing efficient APIs and microservices using Node.js, Express, MongoDB, and RabbitMQFrontend Engineering – Building dynamic applications with React.js and Redux for smooth user experiencesDevOps & Automation – Setting up CI/CD pipelines with Jenkins, GitHub Actions, and Docker for automated deploymentsReal-Time Systems – Working with Redis, RabbitMQ, and event-driven architectures for real-time notifications and messagingPayment Integration – Implementing Stripe APIs and payment gateways for secure transactionsOn the problem-solving side: Solved 600+ DSA problems on platforms like LeetCode and Code360Maintained a 200-day coding streak, focusing on algorithms and data structuresStrong interest in system design, performance optimization, and distributed systemsI enjoy connecting with people who like discussing scalability, backend engineering, and system design. Whether you’re working on high-performance applications or want to collaborate on something interesting, I’m always happy to connect and build together. Follow The Engineering Playbook for content around backend scaling, system design, and DevOps best practices. Always open to networking, sharing knowledge, and exploring new opportunities - feel free to drop me a message.👉 Subscribe to The Engineering Playbook: https://www.linkedin.com/build-relation/newsletter-follow?entityUrn=7312772573631545344👉 Check out my GitHub: https://github.com/marcos-para-garud",
+    "current_company": "Indpro AB",
+    "position": "Greater Bengaluru Area",
+    "followers": 7120,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2025-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "BODEX",
+        "title": "Programming Analyst",
+        "duration": {
+          "start": "2024-10",
+          "end": "2025-10",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Coding Ninjas",
+        "degree": "Diploma",
+        "field_of_study": "DSA and Full stack web development",
+        "dates": "May 2023 – May 2024",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Systems Design",
+      "Low-Level Design"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Sphoorti Yamoji",
+    "linkedin_url": "https://www.linkedin.com/in/sphoorti-yamoji-49b010227/",
+    "headline": "MBA in Finance & Business Analytics",
+    "location": "Belgaum, Karnataka, India",
+    "about": "",
+    "current_company": "INDPRO",
+    "position": "MBA in Finance & Business Analytics",
+    "followers": 133,
+    "connections": 128,
+    "experience": [
+      {
+        "company": "Indpro.io",
+        "title": "Business Development Intern",
+        "duration": {
+          "start": "2025-01",
+          "end": "2025-03",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "Master of Business Administration - MBA",
+        "field_of_study": "Finance, Business Analytics",
+        "dates": "Dec 2024 – 2026",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Customer Engagement",
+      "Team Building"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Bobby Biswas",
+    "linkedin_url": "https://www.linkedin.com/in/bobby-biswas-b8657913/",
+    "headline": "Co-Founder | Strategy & Growth | Helping CTOs & Founders scale towards Global Capability Centers",
+    "location": "Greater Stockholm Metropolitan Area",
+    "about": "Empowerment through digitalization is my mission. I’m a people’s person and a business developer with my heart in technology. I’m a visionary with passion for growth, in people and in organizations. Co-founder of Indpro – combining Indian IT skills with Swedish management since 2005. Today we’re nearing 100 employees. At Indpro, we help: • IT product companies scale up their development.• Entrepreneurs realize their dreams.• CTOs grow their team with the skills required.",
+    "current_company": "Indpro AB",
+    "position": "Co-Founder",
+    "followers": 1517,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Co-Founder | Strategy & Growth | Helping CTOs & Founders scale towards Global Capability Centers",
+        "duration": {
+          "start": "2026-01",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "CEO India",
+        "duration": {
+          "start": "2017-07",
+          "end": "2026-02",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Co-founder and CSO/CMO, Indpro AB",
+        "duration": {
+          "start": "2015-01",
+          "end": "2017-06",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Working chairman, Indpro AB",
+        "duration": {
+          "start": "2005-01",
+          "end": "2008-01",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Owner",
+        "duration": {
+          "start": "2004-01",
+          "end": "2005-01",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "KTH Royal Institute of Technology",
+        "degree": "Bachelor's degree",
+        "field_of_study": "Information Technology",
+        "dates": "2000 – 2003",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Early Stage Ventures",
+      "Co-sourcing"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Tom Bergström",
+    "linkedin_url": "https://www.linkedin.com/in/bergstrom-tom/",
+    "headline": "COO / Deputy CEO at Indpro AB",
+    "location": "Stockholm County, Sweden",
+    "about": "\"Courage is grace under pressure\"",
+    "current_company": "Indpro AB",
+    "position": "COO / Deputy CEO",
+    "followers": 5856,
+    "connections": null,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "COO / Deputy CEO",
+        "duration": {
+          "start": "2006-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Sambandh Sweden",
+        "title": "Co-Founder & COO",
+        "duration": {
+          "start": "2019-11",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "SSP Limited",
+        "title": "Assistant Supervisor",
+        "duration": {
+          "start": "2001-01",
+          "end": "2005-01",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Uppsala University",
+        "degree": "Master of Science (M.Sc.)",
+        "field_of_study": "Engineering Physics",
+        "dates": "1997 – 2004",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Change Management",
+      "Business Transformation"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Pavel Siddique",
+    "linkedin_url": "https://www.linkedin.com/in/pavelsiddique/",
+    "headline": "Founder & CEO, Indpro | Sweden–India Business Leader | AI, Trade, Investment & Digital Transformation | Building Operational Capacity for the AI Era",
+    "location": "Uppsala, Uppsala County, Sweden",
+    "about": "I am a Swedish entrepreneur, business leader and Founder & CEO of Indpro, with more than 20 years of experience building companies, client relationships and technology organizations between Sweden and India. Born and raised in Uppsala, educated in Engineering Physics and Business Administration at Uppsala University, I have lived and worked in India since 2005. This has given me a practical understanding of both Swedish business culture and Indian execution capability — and how the two can be combined to create long-term business value. At Indpro, we help Swedish and international companies build software, data, AI and digital transformation capabilities through cross-cultural teams in Sweden and India. My work has included full P&L responsibility, commercial growth, client development, team leadership and long-term partnerships with companies across retail, civil engineering, industry, SaaS and technology. I believe the next phase of Sweden–India collaboration will move beyond traditional outsourcing towards deeper innovation partnerships. Sweden brings research, technology, design, sustainability and structured problem-solving. India brings talent, entrepreneurship, execution power and market scale. Together, this creates major opportunities within AI, data engineering, digital infrastructure, advanced technology, sustainability and market expansion. My current focus is on helping companies turn technology ambition into operational capacity — combining AI, data, automation and software engineering with the leadership, delivery models and governance needed to create real business outcomes. I am always open to strategic conversations with founders, CEOs, CTOs, board members, investors and ecosystem leaders who are interested in Sweden–India collaboration, AI transformation, global talent, digital business models and long-term growth. Top skillsBusiness Development • Strategic • Leadership • International Business",
+    "current_company": "Indpro",
+    "position": "Founder & CEO, Indpro",
+    "followers": 3241,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "HappyRuH",
+        "title": "Board Member",
+        "duration": {
+          "start": "2024-04",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro",
+        "title": "Managing Director",
+        "duration": {
+          "start": "2013-01",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro",
+        "title": "Deputy Managing Director",
+        "duration": {
+          "start": "2010-01",
+          "end": "2012-12",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Uppsala University",
+        "degree": "Economics",
+        "field_of_study": "",
+        "dates": "2004 – 2006",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Uppsala University",
+        "degree": "Master of Science (MSc)",
+        "field_of_study": "Engineering Physics/Applied Physics",
+        "dates": "1997 – 2004",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Leadership",
+      "Affärsutveckling"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Inderjit Sehrawat",
+    "linkedin_url": "https://www.linkedin.com/in/inderjit-sehrawat-5a9667/",
+    "headline": "MD CEO General Manager High acheiver with Global Experience",
+    "location": "Delhi, India",
+    "about": "More than 20 years of General Management ExperienceExperienced in Global Sales and OperationsProven track record in building organizations and taking them to market leading positions. Very Successfully led Sales, Business Development, Operations and Project Management at different stages of the career in both small and very large organizations. Very successful stints in Security, Telecommunication and Transportation Industries.360 degree exposure in the running of global companies - Sales, Operations, HR, Corporate Affairs, Out sourcing, Finance and Legal mattersVast experience in B2B and B2C sellingVery successful experience of taking startups to industry leading positionsStrong academic background from the best IIT of that time",
+    "current_company": "Indpro Global Solutions Pvt. Ltd.",
+    "position": "MD CEO General Manager High acheiver with Global Experience",
+    "followers": 2104,
+    "connections": null,
+    "experience": [
+      {
+        "company": "DVTEL",
+        "title": "Managing Director DVTEL INDIA",
+        "duration": {
+          "start": "2006-01",
+          "end": "2016-08",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Actel Consulting",
+        "title": "Regional Director India & SAARC",
+        "duration": {
+          "start": "2004-09",
+          "end": "2006-01",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "RailTel Corporation of India Ltd",
+        "title": "Dy General Manager",
+        "duration": {
+          "start": "2000-01",
+          "end": "2004-01",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Indian Institute of Technology, Kanpur",
+        "degree": "M Tech",
+        "field_of_study": "Telecommunications",
+        "dates": "1989 – 1991",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Thapar Institute of Engineering & Technology",
+        "degree": "BE",
+        "field_of_study": "Electronics and Telecommunications",
+        "dates": "1985 – 1989",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Endorsed by 1 person in the last 6 months"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Leon Mendel",
+    "linkedin_url": "https://www.linkedin.com/in/leon-mendel-9a0a0520b/",
+    "headline": "Consultant",
+    "location": "Stockholm, Stockholm County, Sweden",
+    "about": "",
+    "current_company": "Iron Pillar",
+    "position": "Consultant",
+    "followers": 239,
+    "connections": 239,
+    "experience": [
+      {
+        "company": "Iron Pillar",
+        "title": "Research Fellow",
+        "duration": {
+          "start": "2026-04",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Digital Marketing Consultant",
+        "duration": {
+          "start": "2026-01",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Strawberry",
+        "title": "Bartender",
+        "duration": {
+          "start": "2022-06",
+          "end": "2025-09",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Stockholm University",
+        "degree": "Kandidatexamen",
+        "field_of_study": "Communication and Media Studies",
+        "dates": "Aug 2023 – Jun 2025",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Logic Pro",
+      "Music Production"
+    ],
+    "technologies": []
+  }
+]
