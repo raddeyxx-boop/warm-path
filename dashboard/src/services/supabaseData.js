@@ -511,12 +511,21 @@ export async function getWorkflowRunById(id) {
 export async function getCandidatesForRun(runId) {
   const client = ensureClient()
   const owner = await authenticatedOwnerId(client)
-const result = await client
-  .from('ranked_candidates')
-  .select('*')
-  .eq('owner_user_id', ownerUserId)
-  .eq('workflow_run_id', workflowRunId)
-  return { data: [], field: null }
+
+  const result = await client
+    .from('ranked_candidates')
+    .select('*')
+    .eq('owner_user_id', owner)
+    .eq('workflow_run_id', runId)
+
+  if (result.error) {
+    throw explainError(result.error, 'ranked_candidates')
+  }
+
+  return {
+    data: result.data || [],
+    field: 'workflow_run_id',
+  }
 }
 
 export function getRunTargetSummary(run) {
