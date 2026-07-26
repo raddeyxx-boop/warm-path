@@ -1510,22 +1510,36 @@ async function applyConnectionFilters(page, target) {
 
 async function getSearchSuggestions(page) {
 
-    const profileAnchors = page.locator('[role="listbox"] a[href*="/in/"]');
-
-    await profileAnchors.first().waitFor({
-        state: "visible",
-        timeout: 10000
-    });
-
-    console.log("Suggestions appeared.");
+    const profileAnchors = page.locator(
+        '[role="listbox"] a[href*="/in/"]'
+    );
 
     const containers = page.locator(
         '[role="listbox"] [role="option"]:has(a[href*="/in/"]), ' +
         '[role="listbox"] li:has(a[href*="/in/"])'
     );
 
-    return await containers.count().catch(() => 0) > 0 ? containers : profileAnchors;
+    try {
+        await profileAnchors.first().waitFor({
+            state: "visible",
+            timeout: 10000
+        });
 
+        console.log("Suggestions appeared.");
+
+        const containerCount = await containers.count().catch(() => 0);
+
+        return containerCount > 0
+            ? containers
+            : profileAnchors;
+
+    } catch (error) {
+        console.log(
+            "Search suggestions did not appear. Continuing with LinkedIn People results."
+        );
+
+        return null;
+    }
 }
 
 async function profileAnchorForSuggestion(suggestion, normalizedTargetHref) {
@@ -1672,10 +1686,30 @@ async function openTargetProfileBySearch(page, target) {
     await typeTargetNameIntoSearch(page, searchBox, targetName);
     await page.waitForTimeout(1000 + Math.floor(Math.random() * 1000));
 
-    const suggestions = await getSearchSuggestions(page);
-    await page.waitForTimeout(1500 + Math.floor(Math.random() * 700));
-    const dropdownMatch = await selectTargetFromSuggestions(page, target, suggestions);
-    if (!dropdownMatch && !await openTargetFromPeopleResults(page, target, searchBox)) {
+   const suggestions = await getSearchSuggestions(page);
+
+await page.waitForTimeout(
+    1500 + Math.floor(Math.random() * 700)
+);
+
+let dropdownMatch = false;
+
+if (suggestions) {
+    dropdownMatch = await selectTargetFromSuggestions(
+        page,
+        target,
+        suggestions
+    );
+} else {
+    console.log(
+        "Skipping dropdown selection because LinkedIn did not display suggestions."
+    );
+}
+
+if (
+    !dropdownMatch &&
+    !await openTargetFromPeopleResults(page, target, searchBox)
+) {
         const hasTargetUrl = Boolean(normalizeLinkedInProfilePath(target.linkedin_url || target.url));
         throw new Error(hasTargetUrl
             ? "Target profile URL not found in LinkedIn search results."
