@@ -1,0 +1,14 @@
+node_modules
+dashboard/node_modules
+dashboard/dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+test-results
+data/runs
+data/workflows
+sessions
+*.log
+npm-debug.log*

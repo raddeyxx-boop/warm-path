@@ -246,8 +246,8 @@ app.use((req, res) => {
 
 function startServer(options = {}) {
 const recover = options.recoverAbandonedSearches || recoverAbandonedSearches;
-const server = app.listen(PORT, () => {
-    console.log("");
+const server = app.listen(PORT, "0.0.0.0", () => {
+        console.log("");
     console.log("========================================");
     console.log(" LinkedIn Warm Path Finder API");
     console.log("========================================");
