@@ -12,4 +12,4 @@ COPY . .
 
 EXPOSE 10000
 
-CMD ["node", "-r", "dotenv/config", "server.js"]
+CMD ["sh", "-c", "node -r dotenv/config scripts/restore-linkedin-session.js && node -r dotenv/config server.js"]
