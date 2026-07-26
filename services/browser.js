@@ -54,7 +54,6 @@ const UNAUTHENTICATED_UI_SELECTOR = [
 const AUTH_STABILITY_WINDOW_MS = 1200;
 
 const DEFAULT_OPTIONS = {
-    channel: "chrome",
     authCheck: true,
     navigationTimeout: 45000
 };
@@ -436,13 +435,13 @@ async function startBrowser(options = {}) {
             .filter(argument => !/^--(?:auto-open-devtools-for-tabs|remote-debugging|window-size|window-position|start-maximized)/i.test(argument));
 
         const chromiumImpl = config.chromiumImpl || chromium;
-        browser = await chromiumImpl.launch({
-            ...launchOptions,
-            channel: config.channel,
-            headless: true,
-            devtools: false,
-            args: headlessLaunchArgs
-        });
+     browser = await chromiumImpl.launch({
+    ...launchOptions,
+    ...(config.channel ? { channel: config.channel } : {}),
+    headless: true,
+    devtools: false,
+    args: headlessLaunchArgs
+});
         const context = await browser.newContext({
             ...(config.contextOptions || {}),
             storageState: sessionPath,
