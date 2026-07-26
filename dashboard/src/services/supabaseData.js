@@ -2,14 +2,15 @@ import { supabase, getConfigError } from '../lib/supabase'
 import {
   decodeRouteKey,
   getNestedValue,
-  recommendationValue,
   relationshipValue,
   safeJson,
 } from '../utils/format'
 import { normalizeCandidateDisplay } from '../utils/candidateDisplay'
+import { calculateDashboardMetrics } from '../utils/dashboardMetrics'
 
 const PAGE_SIZE = 25
 const MAX_CANDIDATE_ROWS = 1000
+const DASHBOARD_CANDIDATE_BATCH_SIZE = 1000
 const WORKFLOW_RUN_COLUMNS = [
   'id',
   'status',
@@ -18,6 +19,8 @@ const WORKFLOW_RUN_COLUMNS = [
   'total_candidates',
   'created_at',
   'completed_at',
+  'failed_at',
+  'finished_at',
   'average_final_score',
   'top_candidates_count',
   'started_at',
@@ -32,6 +35,9 @@ const WORKFLOW_RUN_COLUMNS = [
   'candidates_ranked',
   'ai_analyses_completed',
   'cache_hit',
+  'n8n_dispatch_status',
+  'n8n_dispatch_error',
+  'n8n_execution_id',
 ].join(',')
 
 function ensureClient() {
@@ -40,6 +46,13 @@ function ensureClient() {
     throw new Error(configError)
   }
   return supabase
+}
+
+async function authenticatedOwnerId(client = ensureClient()) {
+  const { data, error } = await client.auth.getUser()
+  const ownerUserId = data?.user?.id
+  if (error || !ownerUserId) throw new Error('An authenticated user is required to load dashboard data.')
+  return ownerUserId
 }
 
 function explainError(error, table) {
@@ -62,12 +75,13 @@ async function runQuery(query, table) {
   return { data: data || [], count: count ?? null }
 }
 
-async function countRows(table) {
+async function countRows(table, ownerUserId) {
   const client = ensureClient()
+  const owner = ownerUserId || await authenticatedOwnerId(client)
   const { count, error } = await client.from(table).select('*', {
     count: 'exact',
     head: true,
-  })
+  }).eq('owner_user_id', owner)
 
   if (error) throw explainError(error, table)
   return count || 0
@@ -118,6 +132,30 @@ function isValidCandidateRow(row, { topCandidate = false } = {}) {
 
 function filterValidCandidateRows(rows, options) {
   return (rows || []).filter((row) => isValidCandidateRow(row, options))
+}
+
+async function getAllRankedCandidatesForDashboard(ownerUserId, workflowRunId = null) {
+  const client = ensureClient()
+  const owner = ownerUserId || await authenticatedOwnerId(client)
+  const rows = []
+  let from = 0
+
+  while (true) {
+    let rankedQuery = client.from('ranked_candidates').select('*').eq('owner_user_id', owner)
+    if (workflowRunId) rankedQuery = rankedQuery.eq('workflow_run_id', workflowRunId)
+    const { data } = await runQuery(
+      applyValidCandidateFilters(rankedQuery)
+        .order('id', { ascending: true })
+        .range(from, from + DASHBOARD_CANDIDATE_BATCH_SIZE - 1),
+      'ranked_candidates',
+    )
+
+    rows.push(...data)
+    if (data.length < DASHBOARD_CANDIDATE_BATCH_SIZE) break
+    from += DASHBOARD_CANDIDATE_BATCH_SIZE
+  }
+
+  return filterValidCandidateRows(rows).map(normalizeCandidateDisplay)
 }
 
 function applyValidCandidateFilters(query, { topCandidate = false } = {}) {
@@ -173,23 +211,29 @@ async function firstRankedCandidate(matchingQuery, context) {
   return rankedResult.data?.[0] || null
 }
 
-async function findRankedCandidateByLinkedInUrl(client, linkedinUrl) {
+async function findRankedCandidateByLinkedInUrl(client, linkedinUrl, ownerUserId, workflowRunId = null) {
   if (!linkedinUrl) return null
 
   const row = await firstRankedCandidate(
-    () => applyValidCandidateFilters(client.from('ranked_candidates').select('*').eq('linkedin_url', linkedinUrl)),
+    () => {
+      let query = client.from('ranked_candidates').select('*').eq('owner_user_id', ownerUserId)
+      if (workflowRunId) query = query.eq('workflow_run_id', workflowRunId)
+      return applyValidCandidateFilters(query.eq('linkedin_url', linkedinUrl))
+    },
     'ranked_candidates',
   )
   return isValidCandidateRow(row) ? row : null
 }
 
-async function findRankedCandidateByNameAndCompany(client, candidate) {
+async function findRankedCandidateByNameAndCompany(client, candidate, ownerUserId, workflowRunId = null) {
   const name = normalizeMatchValue(candidate?.name)
   const company = normalizeMatchValue(candidate?.current_company)
   if (!name || !company) return null
 
+  let rankedQuery = client.from('ranked_candidates').select('*').eq('owner_user_id', ownerUserId)
+  if (workflowRunId) rankedQuery = rankedQuery.eq('workflow_run_id', workflowRunId)
   const { data } = await runQuery(
-    applyValidCandidateFilters(client.from('ranked_candidates').select('*'))
+    applyValidCandidateFilters(rankedQuery)
       .order('rank', { ascending: true })
       .range(0, MAX_CANDIDATE_ROWS - 1),
     'ranked_candidates',
@@ -218,15 +262,15 @@ async function findRankedCandidateByNameAndCompany(client, candidate) {
   })[0] || null
 }
 
-async function resolveFullCandidateFromTopRow(client, topRow) {
+async function resolveFullCandidateFromTopRow(client, topRow, ownerUserId) {
   if (!topRow) return null
 
   if (topRow.linkedin_url) {
-    const fullRow = await findRankedCandidateByLinkedInUrl(client, topRow.linkedin_url)
+    const fullRow = await findRankedCandidateByLinkedInUrl(client, topRow.linkedin_url, ownerUserId, topRow.workflow_run_id)
     if (fullRow) return fullRow
   }
 
-  return findRankedCandidateByNameAndCompany(client, topRow)
+  return findRankedCandidateByNameAndCompany(client, topRow, ownerUserId, topRow.workflow_run_id)
 }
 
 function mergeCandidateRows(fullRow, topRow) {
@@ -279,47 +323,63 @@ function localCandidateFilter(rows, filters = {}, search = '') {
 }
 
 export async function getDashboardStats() {
-  const [runs, topRows, rankedRows, recentRuns] = await Promise.all([
-    countRows('workflow_runs').catch(() => 0),
-    getTopCandidates({ limit: 3 }).catch(() => []),
-    getRankedCandidates({ page: 1, pageSize: MAX_CANDIDATE_ROWS }).catch(() => ({ data: [], count: 0 })),
-    getWorkflowRuns({ page: 1, pageSize: 5 }).catch(() => ({ data: [] })),
+  const ownerUserId = await authenticatedOwnerId()
+  let recentRuns = { data: [] }
+  let recentRunsError = null
+  try {
+    recentRuns = await getWorkflowRuns({ page: 1, pageSize: 5, ownerUserId })
+  } catch (error) {
+    recentRunsError = error
+  }
+  const activeRun = (recentRuns.data || []).find(run => run.status === 'completed') || recentRuns.data?.[0] || null
+  const workflowRunId = activeRun?.id || null
+  const unavailableCandidateQuery = recentRunsError
+    ? Promise.reject(recentRunsError)
+    : Promise.resolve([])
+  const [runsResult, topRowsResult, candidatesResult] = await Promise.allSettled([
+    countRows('workflow_runs', ownerUserId),
+    workflowRunId ? getTopCandidates({ limit: 3, ownerUserId, workflowRunId }) : unavailableCandidateQuery,
+    workflowRunId ? getAllRankedCandidatesForDashboard(ownerUserId, workflowRunId) : unavailableCandidateQuery,
   ])
 
-  const candidates = rankedRows.data || []
-  const scores = candidates.map((row) => Number(row.final_score)).filter(Number.isFinite)
-  const averageScore = scores.length
-    ? Math.round(scores.reduce((sum, value) => sum + value, 0) / scores.length)
-    : null
-
-  const strongRelationships = candidates.filter((row) => {
-    const value = relationshipValue(row)
-    return /strong|high/i.test(String(value || '')) || Number(value) >= 80
-  }).length
-
-  const highRecommendations = candidates.filter((row) => {
-    return String(recommendationValue(row) || '').trim() === 'Strong'
-  }).length
-
+  const runs = runsResult.status === 'fulfilled' ? runsResult.value : null
+  const topRows = topRowsResult.status === 'fulfilled' ? topRowsResult.value : null
+  const candidates = candidatesResult.status === 'fulfilled' ? candidatesResult.value : null
+  const metricErrors = {
+    runs: runsResult.status === 'rejected' ? runsResult.reason?.message || 'Workflow metric unavailable' : '',
+    top: topRowsResult.status === 'rejected' ? topRowsResult.reason?.message || 'Top-candidate metric unavailable' : '',
+    candidates: candidatesResult.status === 'rejected' ? candidatesResult.reason?.message || 'Candidate metrics unavailable' : '',
+  }
+  const totals = calculateDashboardMetrics({
+    workflowRunId,
+    workflowRuns: runs,
+    rankedCandidates: candidates,
+    topCandidates: topRows,
+  })
   return {
-    totals: {
-      runs,
-      ranked: rankedRows.count || 0,
-      top: topRows.length,
-      averageScore,
-      strongRelationships,
-      highRecommendations,
-    },
-    topRows,
+    totals,
+    metricErrors,
+    topRows: topRows || [],
+    candidateWorkflowRunId: workflowRunId,
     recentRuns: recentRuns.data || [],
   }
 }
 
-export async function getTopCandidates({ limit = 50 } = {}) {
+export async function getTopCandidates({ limit = 50, ownerUserId = null, workflowRunId = null } = {}) {
   const client = ensureClient()
+  const owner = ownerUserId || await authenticatedOwnerId(client)
+  let activeWorkflowRunId = workflowRunId
+  if (!activeWorkflowRunId) {
+    const { data, error } = await client.from('workflow_runs').select('id').eq('owner_user_id', owner)
+      .eq('status', 'completed').order('completed_at', { ascending: false, nullsFirst: false }).limit(1)
+    if (error) throw explainError(error, 'workflow_runs')
+    activeWorkflowRunId = data?.[0]?.id || null
+  }
+  if (!activeWorkflowRunId) return []
   const cappedLimit = Math.min(limit, 3)
   const { data } = await runQuery(
-    applyValidCandidateFilters(client.from('top_candidates').select('*'), { topCandidate: true })
+    applyValidCandidateFilters(client.from('top_candidates').select('*').eq('owner_user_id', owner)
+      .eq('workflow_run_id', activeWorkflowRunId), { topCandidate: true })
       .order('rank', { ascending: true })
       .limit(cappedLimit),
     'top_candidates',
@@ -327,7 +387,7 @@ export async function getTopCandidates({ limit = 50 } = {}) {
   const validRows = filterValidCandidateRows(data, { topCandidate: true }).slice(0, cappedLimit)
   const hydratedRows = await Promise.all(
     validRows.map(async (row) => {
-      const fullRow = await resolveFullCandidateFromTopRow(client, row).catch(() => null)
+      const fullRow = await resolveFullCandidateFromTopRow(client, row, owner).catch(() => null)
       return normalizeCandidateDisplay(mergeCandidateRows(fullRow, row))
     }),
   )
@@ -336,11 +396,13 @@ export async function getTopCandidates({ limit = 50 } = {}) {
 
 export async function getTopCandidatesForRun(runId) {
   const client = ensureClient()
+  const owner = await authenticatedOwnerId(client)
   const { data } = await runQuery(
     applyValidCandidateFilters(
       client
         .from('top_candidates')
         .select('*')
+        .eq('owner_user_id', owner)
         .eq('workflow_run_id', runId),
       { topCandidate: true },
     )
@@ -348,7 +410,14 @@ export async function getTopCandidatesForRun(runId) {
       .limit(3),
     'top_candidates',
   )
-  return filterValidCandidateRows(data, { topCandidate: true }).slice(0, 3).map(normalizeCandidateDisplay)
+  const validRows = filterValidCandidateRows(data, { topCandidate: true }).slice(0, 3)
+  const hydratedRows = await Promise.all(
+    validRows.map(async (row) => {
+      const fullRow = await resolveFullCandidateFromTopRow(client, row, owner).catch(() => null)
+      return normalizeCandidateDisplay(mergeCandidateRows(fullRow, row))
+    }),
+  )
+  return hydratedRows
 }
 
 export async function getRankedCandidates({
@@ -359,9 +428,10 @@ export async function getRankedCandidates({
   sort = 'rank',
 } = {}) {
   const client = ensureClient()
+  const owner = await authenticatedOwnerId(client)
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
-  let query = applyValidCandidateFilters(client.from('ranked_candidates').select('*'))
+  let query = applyValidCandidateFilters(client.from('ranked_candidates').select('*').eq('owner_user_id', owner))
   query = applyCandidateOrder(query, sort).range(0, MAX_CANDIDATE_ROWS - 1)
   const { data } = await runQuery(query, 'ranked_candidates')
   const validRows = filterValidCandidateRows(data)
@@ -375,14 +445,17 @@ export async function getRankedCandidates({
 
 export async function getRankedCandidateById(id) {
   const client = ensureClient()
+  const owner = await authenticatedOwnerId(client)
   const decoded = decodeRouteKey(id)
 
   if (!decoded) {
-    const rankedResult = await applyValidCandidateFilters(client.from('ranked_candidates').select('*').eq('id', id)).maybeSingle()
+    const rankedResult = await applyValidCandidateFilters(client.from('ranked_candidates').select('*')
+      .eq('owner_user_id', owner).eq('id', id)).maybeSingle()
     if (rankedResult.error) throw explainError(rankedResult.error, 'ranked_candidates')
     if (isValidCandidateRow(rankedResult.data)) return normalizeCandidateDisplay(rankedResult.data)
 
-    const topResult = await applyValidCandidateFilters(client.from('top_candidates').select('*').eq('id', id), {
+    const topResult = await applyValidCandidateFilters(client.from('top_candidates').select('*')
+      .eq('owner_user_id', owner).eq('id', id), {
       topCandidate: true,
     }).maybeSingle()
     if (topResult.error) throw explainError(topResult.error, 'top_candidates')
@@ -390,22 +463,24 @@ export async function getRankedCandidateById(id) {
       return null
     }
 
-    const fullRow = await resolveFullCandidateFromTopRow(client, topResult.data)
+    const fullRow = await resolveFullCandidateFromTopRow(client, topResult.data, owner)
     return normalizeCandidateDisplay(fullRow)
   }
 
   const fullRow =
-    (await findRankedCandidateByLinkedInUrl(client, decoded.linkedin_url)) ||
-    (await findRankedCandidateByNameAndCompany(client, decoded))
+    (await findRankedCandidateByLinkedInUrl(client, decoded.linkedin_url, owner)) ||
+    (await findRankedCandidateByNameAndCompany(client, decoded, owner))
 
   return normalizeCandidateDisplay(fullRow)
 }
 
-export async function getWorkflowRuns({ page = 1, pageSize = PAGE_SIZE, search = '', status = '', sort = 'newest' } = {}) {
+export async function getWorkflowRuns({ page = 1, pageSize = PAGE_SIZE, search = '', status = '', sort = 'newest', ownerUserId = null } = {}) {
   const client = ensureClient()
+  const owner = ownerUserId || await authenticatedOwnerId(client)
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
   let query = client.from('workflow_runs').select(WORKFLOW_RUN_COLUMNS, { count: 'exact' })
+    .eq('owner_user_id', owner)
 
   if (status) query = query.eq('status', status)
 
@@ -426,19 +501,23 @@ export async function getWorkflowRuns({ page = 1, pageSize = PAGE_SIZE, search =
 
 export async function getWorkflowRunById(id) {
   const client = ensureClient()
-  const { data, error } = await client.from('workflow_runs').select(WORKFLOW_RUN_COLUMNS).eq('id', id).maybeSingle()
+  const owner = await authenticatedOwnerId(client)
+  const { data, error } = await client.from('workflow_runs').select(WORKFLOW_RUN_COLUMNS)
+    .eq('owner_user_id', owner).eq('id', id).maybeSingle()
   if (error) throw explainError(error, 'workflow_runs')
   return data
 }
 
 export async function getCandidatesForRun(runId) {
   const client = ensureClient()
+  const owner = await authenticatedOwnerId(client)
   const fields = ['workflow_run_id', 'run_id']
 
   for (const field of fields) {
     const { data, error } = await client
       .from('ranked_candidates')
       .select('*')
+      .eq('owner_user_id', owner)
       .eq(field, runId)
       .not('id', 'is', null)
       .not('name', 'is', null)
@@ -475,11 +554,25 @@ export function getCandidateIntroduction(row) {
   return getNestedValue(row, ['personalized_introduction', 'ai_analysis.personalized_introduction'])
 }
 
-export function subscribeWorkflowRuns(onChange) {
+export function subscribeWorkflowRuns(onChange, { workflowRunId = null } = {}) {
   const client = ensureClient()
-  const channel = client
-    .channel('workflow-runs-live')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'workflow_runs' }, onChange)
-    .subscribe()
-  return () => client.removeChannel(channel)
+  let channel = null
+  let cancelled = false
+  void client.auth.getUser().then(({ data }) => {
+    const ownerId = data?.user?.id
+    if (!ownerId || cancelled) return
+    const filter = workflowRunId ? `id=eq.${workflowRunId}` : `owner_user_id=eq.${ownerId}`
+    channel = client.channel(`workflow-runs-live-${ownerId}-${workflowRunId || 'all'}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'workflow_runs', filter,
+      }, (event) => {
+        if (event.new?.owner_user_id && event.new.owner_user_id !== ownerId) return
+        onChange(event)
+      })
+      .subscribe()
+  })
+  return () => {
+    cancelled = true
+    if (channel) void client.removeChannel(channel)
+  }
 }

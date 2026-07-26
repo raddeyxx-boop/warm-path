@@ -8,7 +8,12 @@ export function AdminRoute() {
 
   if (auth.isLoading) return <LoadingState label="Checking administrator access..." />
   if (!auth.isAuthenticated) return <Navigate to="/admin/login" replace state={{ from: location }} />
-  if (!auth.isAdmin) return <Navigate to="/unauthorized" replace />
+  if (!auth.profile && !auth.authError) {
+    return <LoadingState label="Loading administrator account..." />
+  }
+  if (!auth.isAdmin || auth.profile?.approval_status !== 'approved' || !auth.profile?.is_active) {
+    return <Navigate to="/unauthorized" replace />
+  }
 
   return <Outlet />
 }

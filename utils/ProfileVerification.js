@@ -35,13 +35,24 @@ function scoreTextField(label, suggestionText, expectedValue, points) {
     };
 }
 
+function employmentFromHeadline(headline) {
+    const cleaned = cleanText(headline);
+    const match = cleaned.match(/^(.+?)\s+at\s+(.+)$/i);
+
+    return match
+        ? { position: cleanText(match[1]), company: cleanText(match[2]) }
+        : { position: "", company: "" };
+}
+
 function expectedProfileFields(profile = {}) {
+    const headlineEmployment = employmentFromHeadline(profile.headline);
+
     return {
         name: profile.name,
-        company: profile.company || profile.current_company,
+        company: profile.company || profile.current_company || headlineEmployment.company,
         headline: profile.headline,
         location: profile.location,
-        position: profile.position
+        position: profile.position || headlineEmployment.position
     };
 }
 
@@ -117,6 +128,7 @@ function scoreToPercent(score) {
 
 module.exports = {
     cleanText,
+    employmentFromHeadline,
     expectedProfileFields,
     fieldMatches,
     normalizeText,

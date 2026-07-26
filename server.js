@@ -3,6 +3,9 @@ const fs = require("fs");
 const path = require("path");
 const express = require("express");
 const { createStartSearchHandler } = require("./services/search-api");
+const { recoverAbandonedSearches } = require("./services/search-recovery");
+const { failActiveExecutions } = require("./services/playwright-search-runner");
+const { createStopWorkflowHandler, createDeleteWorkflowHandler } = require("./services/workflow-api");
 
 const app = express();
 
@@ -19,6 +22,10 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 let activeRun = null;
+const recoveryState = { ready: false, error: null };
+const startSearchHandler = createStartSearchHandler();
+const stopWorkflowHandler = createStopWorkflowHandler();
+const deleteWorkflowHandler = createDeleteWorkflowHandler();
 
 const DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -39,7 +46,7 @@ app.use((req, res, next) => {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Vary", "Origin");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     }
 
     if (req.method === "OPTIONS") {
@@ -62,7 +69,7 @@ function readBearerToken(req) {
 
 app.get("/", (req, res) => {
     res.json({
-        success: true,
+        success: recoveryState.ready,
         service: "LinkedIn Warm Path Finder API",
         version: "1.0.0",
         status: "Running",
@@ -71,15 +78,27 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-    res.json({
+    res.status(recoveryState.ready ? 200 : 503).json({
         success: true,
-        status: "Healthy",
+        status: recoveryState.ready ? "Healthy" : "Recovering",
+        recovery_error: recoveryState.error ? recoveryState.error.code || "RECOVERY_FAILED" : null,
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
     });
 });
 
-app.post("/api/searches/start", createStartSearchHandler());
+app.post("/api/searches/start", (req, res, next) => {
+    if (!recoveryState.ready) {
+        return res.status(503).json({
+            success: false,
+            code: "BACKEND_RECOVERY_PENDING",
+            message: "The backend is recovering interrupted searches. Try again shortly."
+        });
+    }
+    return startSearchHandler(req, res, next);
+});
+app.post("/api/workflows/:workflowRunId/stop", stopWorkflowHandler);
+app.delete("/api/workflows/:workflowRunId", deleteWorkflowHandler);
 
 app.post("/run", async (req, res) => {
     try {
@@ -152,7 +171,8 @@ if (url) {
 
 activeRun = {
     startedAt: new Date().toISOString(),
-    target
+    target,
+    child: null
 };
 
 try {
@@ -166,6 +186,7 @@ try {
             },
             stdio: ["ignore", "inherit", "inherit"]
         });
+        activeRun.child = child;
 
         child.on("error", reject);
         child.on("close", code => {
@@ -223,8 +244,9 @@ app.use((req, res) => {
     });
 });
 
-function startServer() {
-return app.listen(PORT, () => {
+function startServer(options = {}) {
+const recover = options.recoverAbandonedSearches || recoverAbandonedSearches;
+const server = app.listen(PORT, () => {
     console.log("");
     console.log("========================================");
     console.log(" LinkedIn Warm Path Finder API");
@@ -234,11 +256,73 @@ return app.listen(PORT, () => {
     console.log(` Run API: POST http://localhost:${PORT}/run`);
     console.log(` Search API: POST http://localhost:${PORT}/api/searches/start`);
     console.log("========================================");
+    void recover().then(() => {
+        recoveryState.ready = true;
+        recoveryState.error = null;
+    }).catch(error => {
+        recoveryState.ready = false;
+        recoveryState.error = error;
+        console.error("[Recovery] Backend startup recovery failed. Search starts remain disabled.", {
+            code: error.code || "unknown",
+            message: error.message,
+            details: error.details || null,
+            hint: error.hint || null
+        });
+    });
 });
+
+server.on("error", (err) => {
+    console.error("SERVER ERROR:", err);
+});
+
+server.on("close", () => {
+    console.error("SERVER CLOSED");
+});
+
+console.log("Listening:", server.listening);
+
+return server;
 }
 
-module.exports = { app, startServer };
+function installProcessHandlers(server, options = {}) {
+    const exit = options.exit || (code => process.exit(code));
+    const failExecutions = options.failActiveExecutions || failActiveExecutions;
+    let shuttingDown = false;
+
+    async function shutdown(reason, exitCode) {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        console.error("[Recovery] Backend shutdown started.", { reason });
+        if (activeRun?.child && !activeRun.child.killed) activeRun.child.kill("SIGTERM");
+        await failExecutions(reason);
+        await new Promise(resolve => {
+            if (!server?.listening) return resolve();
+            const timer = setTimeout(resolve, 5000);
+            server.close(() => { clearTimeout(timer); resolve(); });
+        });
+        exit(exitCode);
+    }
+
+    const handlers = {
+        SIGINT: () => void shutdown("Search interrupted by SIGINT (Ctrl+C).", 130),
+        SIGTERM: () => void shutdown("Search interrupted by SIGTERM.", 143),
+        uncaughtException: error => {
+            console.error("Uncaught exception:", error);
+            void shutdown(`Search interrupted by uncaught exception: ${error.message}`, 1);
+        },
+        unhandledRejection: reason => {
+            const message = reason instanceof Error ? reason.message : String(reason);
+            console.error("Unhandled rejection:", reason);
+            void shutdown(`Search interrupted by unhandled rejection: ${message}`, 1);
+        }
+    };
+    Object.entries(handlers).forEach(([event, handler]) => process.on(event, handler));
+    return { handlers, shutdown };
+}
+
+module.exports = { app, installProcessHandlers, recoveryState, startServer };
 
 if (require.main === module) {
-    startServer();
+    const server = startServer();
+    installProcessHandlers(server);
 }

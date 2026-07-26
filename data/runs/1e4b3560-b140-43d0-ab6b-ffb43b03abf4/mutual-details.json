@@ -1,0 +1,266 @@
+[
+  {
+    "name": "Arun Rajan",
+    "linkedin_url": "https://www.linkedin.com/in/arun-rajan-117556118/",
+    "headline": "Software Engineer @ Indpro AB | C# & React.js",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a dedicated and passionate C# developer with over 7+ years of experience in the software development industry, I specialize in creating efficient, scalable, and robust applications. My expertise lies in leveraging the power of . NET core and . NET framework to deliver high-quality software solutions that meet the dynamic needs of modern businesses. Top skills. NET Core • React.js • Microsoft SQL Server • C#",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 168,
+    "connections": 164,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2021-10",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "SayG",
+        "title": "Computer Software Specialist",
+        "duration": {
+          "start": "2020-01",
+          "end": "2021-04",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Hindusthan College of Engineering and Technology",
+        "degree": "Bachelor of Technology - BTech",
+        "field_of_study": "Information Technology",
+        "dates": "2013 – 2017",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "C#",
+      "Vue.js"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Uttam kumar Maharana",
+    "linkedin_url": "https://www.linkedin.com/in/uttamkumar-dev/",
+    "headline": "Full Stack Developer | MEAN MERN Specialist | Experienced in MongoDB, PostgreSQL, MySQL, Redux",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a Full Stack Developer with experience as a Programmer Analyst, I bring a unique perspective to building robust and scalable web applications. I have hands-on experience with the MERN stack (MongoDB, Express.js, React.js, Node.js) and other technologies like PostgreSQL, MySQL, Prisma, and Redux for state management. My work spans from developing online surveys with Sawtooth (SSI Web) to building personal projects, including interactive quiz platforms, social media platforms and inventory management tools. Top skillsFull Stack Development (MERN) • Databases: MongoDB, PostgreSQL, MySQL • ORMs: Mongoose, Prisma • State Management: Redux • API Development & Integration",
+    "current_company": "Indpro AB",
+    "position": "Full Stack Developer",
+    "followers": 209,
+    "connections": 207,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-04",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Techsaint Technology Solutions Pvt.Ltd.",
+        "title": "Full Stack Developer",
+        "duration": {
+          "start": "2024-11",
+          "end": "2025-03",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Strategic Research Insights",
+        "title": "Programmer Analyst",
+        "duration": {
+          "start": "2022-07",
+          "end": "2023-06",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Institute of Management & Information Technology, Cuttack",
+        "degree": "Master's degree",
+        "field_of_study": "Computer Engineering",
+        "dates": "2020 – 2022",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Angular",
+      "Ionic Framework"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Dhanush Kumar M",
+    "linkedin_url": "https://www.linkedin.com/in/dhanush-kumar-m-942960233/",
+    "headline": "Software Engineer | Front-End & Back-End Development | React, Svelte, TypeScript, Node.js | AWS",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a Software Engineer with hands-on experience in both front-end and back-end development, I thrive on building scalable, high-performance web applications. Currently, I am working at Indpro AB, a Swedish company, where I collaborate directly with clients on live production systems. My skill set spans across React, Svelte, TypeScript, and Node.js, enabling me to create dynamic, responsive web interfaces and develop robust server-side applications. Key Highlights: Performance Optimization: Reduced application load times by 50% through code optimization and efficient database queries. Full-Stack Development: Expertise in building RESTful APIs and deploying applications with Node.js and PostgreSQL. Cloud & DevOps: Experience with AWS, Docker, and CI/CD pipelines to streamline deployment and hosting. Collaboration & Agile: Actively participating in Agile workflows, managing sprint cycles, and collaborating with cross-functional teams to deliver high-quality production-ready applications. Integrated external APIs from third-party providers to add payment processing, authentication, and data analytics featuresI am passionate about coding standards, collaborative problem-solving, and continuously improving my skills through team collaboration and feedback loops. I am always seeking new opportunities to solve complex problems, optimize user experiences, and contribute to the success of any project I am a part of. Let's connect if you’re looking for a dedicated professional who blends precision with passion.",
+    "current_company": "Indpro AB",
+    "position": "Software Engineer",
+    "followers": 789,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2024-08",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Part-Time Developer",
+        "duration": {
+          "start": "2024-06",
+          "end": "2024-07",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Intern",
+        "duration": {
+          "start": "2024-04",
+          "end": "2024-06",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ms Ramaiah College Of Arts Science and Commerce",
+        "degree": "BCA",
+        "field_of_study": "Computer Software Engineering",
+        "dates": "2021 – Apr 2024",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Full-Stack Development",
+      "TypeScript"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Amitha Shenoy",
+    "linkedin_url": "https://www.linkedin.com/in/amitha-shenoy-95672817/",
+    "headline": "Sr Software Engineer at Indpro AB | .NET Core | Microservices | Event-Driven Architecture | REST APIs | Clean Architecture",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Senior Software Engineer with 10+ years of experience designing, developing, and supporting enterprise applications using C#, . NET Core, REST APIs, and microservices-based architectures. Experienced in end to-end feature ownership, technical design discussions, code reviews, production support, and backend system architecture. Technical Interests:• . NET Core / ASP. NET Core• Microservices• Event-Driven Architecture• RabbitMQ & MassTransit• Azure Functions• SignalR• Clean Architecture• REST APIsTop skillsMicroservices • REST APIs • . NET Core • C# • RabbitMQ",
+    "current_company": "Indpro AB",
+    "position": "Sr Software Engineer",
+    "followers": 185,
+    "connections": 179,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Software Engineer",
+        "duration": {
+          "start": "2019-06",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "Senior Software Engineer",
+        "duration": {
+          "start": "2024-08",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Visvesvaraya Technological University",
+        "degree": "Bachelor of Engineering (BE)",
+        "field_of_study": "Computer Science",
+        "dates": "2004 – 2008",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "RabbitMQ",
+      "Microservices"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Sureshkumar Ramasamy",
+    "linkedin_url": "https://www.linkedin.com/in/sureshkumar79/",
+    "headline": "Project Leader at Indpro and CSM certified scrum professional",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Experienced IT professional with a strong passion for coding and a deep commitment to continuous learning. I bring extensive expertise across the full software development life cycle — from requirements gathering and architectural design to development, testing, deployment, and support. Proficient in a range of technologies including . NET, Azure, ReactJS, and SQL Server, with a focus on building scalable, high-performance applications. Adept at setting up and managing CI/CD pipelines, ensuring efficient and reliable delivery. A Certified Scrum Master, I have successfully led Agile teams using the Scrum framework, promoting collaboration, transparency, and iterative development. As a supportive leader, I prioritize team growth and mentoring, helping team members reach their full potential. With strong logical thinking, excellent problem-solving skills, and a customer-centric mindset, I consistently deliver high-quality solutions that align with business goals. My enthusiasm for new technologies drives me to stay current and continuously improve both personally and professionally.",
+    "current_company": "Indpro AB",
+    "position": "Project Leader",
+    "followers": 268,
+    "connections": null,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Project Manager",
+        "duration": {
+          "start": "2007-04",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Bharathiar University",
+        "degree": "Master of Computer Applications (MCA)",
+        "field_of_study": "Computer Science",
+        "dates": "1997 – 2000",
+        "activities": "Participated in technical events and won the top prize in programming.",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Microsoft Azure",
+      "Continuous Integration (CI)"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Ramaprabu G",
+    "linkedin_url": "https://www.linkedin.com/in/ramaprabu/",
+    "headline": "Team lead",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "Team lead",
+    "followers": 26,
+    "connections": 26,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Team Lead",
+        "duration": {
+          "start": "2005-11",
+          "end": null,
+          "currently_working": true
+        }
+      }
+    ],
+    "education": [],
+    "skills": [],
+    "technologies": []
+  }
+]

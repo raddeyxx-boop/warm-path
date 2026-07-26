@@ -116,7 +116,7 @@ export function gradeClass(value) {
 export function statusClass(value) {
   const status = fallback(value, '').toLowerCase()
   if (/complete|success|done/.test(status)) return 'badge-success'
-  if (/fail|error|cancel/.test(status)) return 'badge-danger'
+  if (/fail|error|cancel|stop/.test(status)) return 'badge-danger'
   if (/run|progress|pending/.test(status)) return 'badge-warning'
   return 'badge-muted'
 }

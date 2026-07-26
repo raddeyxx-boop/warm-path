@@ -26,7 +26,9 @@ const {
 } = require("./HiringInfluence-Classifier");
 
 const {
-    serializeFinalProfile
+    serializeFinalProfile,
+    serializeFinalProfiles,
+    validateClassifiedCandidates
 } = require("../utils/FinalProfileSerializer");
 const {
     writeJsonAtomicSync
@@ -121,9 +123,11 @@ async function main() {
     }
 
 const dedupedProfiles = dedupeProfiles(profiles);
-const classifiedProfiles = dedupedProfiles.map(profile =>
+const classifiedProfiles = serializeFinalProfiles(dedupedProfiles.map(profile =>
     classifyPipeline(profile, target)
-);
+));
+
+validateClassifiedCandidates(classifiedProfiles);
 
 writeJsonAtomicSync(OUTPUT_PATH, classifiedProfiles);
 

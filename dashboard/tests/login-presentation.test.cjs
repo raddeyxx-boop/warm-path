@@ -1,0 +1,95 @@
+const assert = require('node:assert/strict')
+const { readFileSync } = require('node:fs')
+const { join } = require('node:path')
+const test = require('node:test')
+
+const root = join(__dirname, '..', 'src')
+const login = readFileSync(join(root, 'pages', 'Login.jsx'), 'utf8')
+const landing = readFileSync(join(root, 'pages', 'Landing.jsx'), 'utf8')
+const app = readFileSync(join(root, 'App.jsx'), 'utf8')
+const presentation = readFileSync(join(root, 'components', 'login', 'LoginPresentation.jsx'), 'utf8')
+const relationshipNetwork = readFileSync(join(root, 'components', 'login', 'RelationshipNetworkSection.jsx'), 'utf8')
+const coreRequirement = readFileSync(join(root, 'components', 'login', 'CoreRequirementSection.jsx'), 'utf8')
+const css = readFileSync(join(root, 'index.css'), 'utf8')
+
+test('login form behavior remains connected to the existing authentication flow', () => {
+  assert.match(login, /onSubmit=\{handleSubmit\}/)
+  assert.match(login, /await auth\.signIn\(email, password\)/)
+  assert.match(login, /autoComplete="email"/)
+  assert.match(login, /current-password/)
+  assert.doesNotMatch(login, /LoginPresentation/)
+})
+
+test('presentation is the default route and includes the core relationship requirement', () => {
+  assert.match(app, /path="\/" element=\{<Landing \/>\}/)
+  assert.match(app, /path="\/login" element=\{<Login \/>\}/)
+  assert.match(landing, /<LoginPresentation/)
+  assert.match(landing, /navigate\('\/login'\)/)
+  assert.match(landing, /landing-sign-in/)
+  assert.match(landing, /presentation-top-actions[\s\S]*landing-sign-in[\s\S]*<main className="auth-page-welcome landing-page">/)
+  assert.match(relationshipNetwork, /className="rn-brand">INDPRO/)
+  assert.match(coreRequirement, /You must have/)
+  assert.match(coreRequirement, /with the target\./)
+  assert.match(coreRequirement, /A meaningful connection must already exist\./)
+  assert.match(presentation, /BE FINDER/)
+  assert.doesNotMatch(presentation, /Sign In to Continue/)
+  assert.match(landing, /futuristic-action futuristic-action--compact/)
+  assert.match(presentation, /futuristic-action futuristic-action--cta/)
+  assert.match(presentation, /id="usage"/)
+})
+
+test('all ten relationship evidence signals are explained', () => {
+  for (const label of ['Same Company', 'Same Department', 'Same Location', 'Same School', 'Shared Skills',
+    'Shared Technologies', 'Experience Overlap', 'Education Overlap', 'Current Employee', 'Years at Company']) {
+    assert.match(presentation, new RegExp(label))
+  }
+})
+
+test('progress tracking, responsive layouts, and reduced motion are implemented', () => {
+  assert.match(presentation, /IntersectionObserver/)
+  assert.match(presentation, /aria-label="Welcome presentation sections"/)
+  assert.match(css, /@media \(max-width: 820px\)/)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/)
+  assert.match(css, /@keyframes futuristic-light-sweep/)
+  assert.match(css, /\.futuristic-action--cta::after/)
+  assert.match(css, /@keyframes sign-in-light-sweep/)
+  assert.match(css, /\.landing-sign-in::before/)
+  assert.match(css, /\.presentation-top-actions\s*\{[^}]*position:\s*fixed[^}]*right:\s*28px/s)
+  assert.doesNotMatch(css, /\.presentation-top-actions\s*\{[^}]*(?:left|margin-left|translateX)\s*:/s)
+  assert.match(css, /\.auth-page-welcome/)
+})
+
+test('the second section uses the rich relationship graph instead of the old MiniNetwork', () => {
+  assert.match(presentation, /<RelationshipNetworkSection \/>/)
+  assert.doesNotMatch(presentation, /<Section id="network"[\s\S]*?<MiniNetwork \/>/)
+  assert.match(relationshipNetwork, /const demoNodes = \[/)
+  assert.match(relationshipNetwork, /const demoEdges = \[/)
+  assert.match(relationshipNetwork, /const warmPath = \['you', 'p3', 'p7', 'p11', 'target'\]/)
+  assert.match(relationshipNetwork, /What is a warm path\?/i)
+  assert.match(relationshipNetwork, /role="tooltip"/)
+  assert.match(relationshipNetwork, /aria-label="Relationship network showing/)
+})
+
+test('the core requirement is a relationship intelligence command center', () => {
+  assert.match(presentation, /<CoreRequirementSection \/>/)
+  assert.doesNotMatch(presentation, /function MiniNetwork/)
+  assert.match(coreRequirement, /Relationship engine/)
+  assert.match(coreRequirement, /Real Relationship/)
+  assert.match(coreRequirement, /Explainable Evidence/)
+  assert.match(coreRequirement, /AI Relationship Analysis/)
+  assert.match(coreRequirement, /Warm Path Finder cannot invent relationships/)
+  assert.match(coreRequirement, /Overall strength/)
+  assert.match(coreRequirement, /aria-label="Relationship intelligence graph/)
+})
+
+test('the login presentation hides only its own scrollbar without disabling scrolling', () => {
+  assert.match(css, /\.auth-page-welcome\s*\{[^}]*height:\s*100vh[^}]*overflow-y:\s*auto[^}]*scrollbar-width:\s*none/s)
+  assert.match(css, /\.auth-page-welcome::-webkit-scrollbar/)
+  assert.match(css, /\.landing-page::-webkit-scrollbar/)
+  assert.doesNotMatch(css, /html\s*\{[^}]*scrollbar-width:\s*none/s)
+  assert.match(css, /\.landing-page\s*\{[^}]*scroll-snap-type:\s*none/s)
+  assert.match(css, /\.landing-page \.wp-slide\s*\{[^}]*min-height:\s*100vh[^}]*scroll-snap-align:\s*none[^}]*content-visibility:\s*auto/s)
+  assert.match(presentation, /classList\.toggle\('is-active', entry\.isIntersecting\)/)
+  assert.match(css, /\.rn-section\.is-active/)
+  assert.match(css, /\.cri-section\.is-active/)
+})

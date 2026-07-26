@@ -1,95 +1,139 @@
-import { LogOut, RefreshCcw, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
-import { EmptyState, ErrorState, LoadingState } from '../components/StateBlocks'
-import { createUser, deleteUser, listUsers, setUserActive, setUserRole } from '../services/adminUsers'
-import { formatDate } from '../utils/format'
+import { AddUserPanel } from '../components/admin/AddUserPanel'
+import { AdminHeader } from '../components/admin/AdminHeader'
+import { AdminLayout } from '../components/admin/AdminLayout'
+import { AdminOverviewCards } from '../components/admin/AdminOverviewCards'
+import { AllUsersPanel } from '../components/admin/AllUsersPanel'
+import { PendingUsersPanel } from '../components/admin/PendingUsersPanel'
+import { approveUser, createUser, deleteUser, listPendingUsers, listUsers, setUserActive, setUserRole } from '../services/adminUsers'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const EMPTY_FORM = { email: '', password: '', fullName: '', contactNumber: '', role: 'user' }
 
 export function Admin() {
   const auth = useAuth()
   const navigate = useNavigate()
+  const [activeSection, setActiveSection] = useState('pending')
   const [users, setUsers] = useState([])
+  const [pendingUsers, setPendingUsers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [pendingLoaded, setPendingLoaded] = useState(false)
+  const [usersLoaded, setUsersLoaded] = useState(false)
+  const [pendingError, setPendingError] = useState('')
+  const [usersError, setUsersError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [message, setMessage] = useState('')
+  const [lastRefreshed, setLastRefreshed] = useState('')
   const [busyId, setBusyId] = useState('')
   const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState({ email: '', password: '', fullName: '', role: 'user' })
+  const [form, setForm] = useState(EMPTY_FORM)
 
-  const sortedUsers = useMemo(() => [...users].sort((a, b) => String(a.email || '').localeCompare(String(b.email || ''))), [users])
+  const approvedUsers = useMemo(
+    () => users.filter((user) => user.approval_status === 'approved'),
+    [users],
+  )
+  const allKnownUsers = useMemo(() => {
+    const rows = new Map(users.map((user) => [user.id, user]))
+    pendingUsers.forEach((user) => rows.set(user.id, user))
+    return [...rows.values()]
+  }, [pendingUsers, users])
+  const recentCount = useMemo(() => {
+    const threshold = Date.now() - (7 * 24 * 60 * 60 * 1000)
+    return allKnownUsers.filter((user) => {
+      const created = Date.parse(user.created_at || '')
+      return Number.isFinite(created) && created >= threshold
+    }).length
+  }, [allKnownUsers])
 
   async function loadUsers() {
     setLoading(true)
-    setError('')
-    try {
-      setUsers(await listUsers())
-    } catch (err) {
-      setError(err.message || 'Could not load users.')
-    } finally {
-      setLoading(false)
+    setPendingError('')
+    setUsersError('')
+    const [pendingResult, usersResult] = await Promise.allSettled([listPendingUsers(), listUsers()])
+
+    if (pendingResult.status === 'fulfilled') setPendingUsers(pendingResult.value)
+    else {
+      console.error('Admin page could not load pending users:', pendingResult.reason)
+      setPendingError(pendingResult.reason?.message || 'Could not load pending users.')
     }
+    setPendingLoaded(true)
+
+    if (usersResult.status === 'fulfilled') setUsers(usersResult.value)
+    else {
+      console.error('Admin page could not load users:', usersResult.reason)
+      setUsersError(usersResult.reason?.message || 'Could not load users.')
+    }
+    setUsersLoaded(true)
+
+    if (pendingResult.status === 'fulfilled' || usersResult.status === 'fulfilled') {
+      setLastRefreshed(new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date()))
+    }
+    setLoading(false)
   }
 
   useEffect(() => {
     loadUsers()
+    document.documentElement.classList.add('admin-route-scrollbar-hidden')
+    document.body.classList.add('admin-route-scrollbar-hidden')
+    return () => {
+      document.documentElement.classList.remove('admin-route-scrollbar-hidden')
+      document.body.classList.remove('admin-route-scrollbar-hidden')
+    }
   }, [])
 
   async function handleCreate(event) {
     event.preventDefault()
+    if (creating) return
     const email = form.email.trim().toLowerCase()
-    if (!EMAIL_PATTERN.test(email)) {
-      setError('Enter a valid email address.')
-      return
-    }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters.')
-      return
-    }
+    if (!EMAIL_PATTERN.test(email)) return setActionError('Enter a valid email address.')
+    if (!form.fullName.trim()) return setActionError('Full name is required.')
+    if (form.password.length < 8) return setActionError('Password must be at least 8 characters.')
 
     setCreating(true)
-    setError('')
+    setActionError('')
     setMessage('')
     try {
       await createUser({
         email,
         password: form.password,
         fullName: form.fullName.trim(),
+        contactNumber: form.contactNumber.trim(),
         role: form.role,
       })
-      setForm({ email: '', password: '', fullName: '', role: 'user' })
-      setMessage(`Created ${email}.`)
+      setForm(EMPTY_FORM)
+      setMessage('Account created successfully.')
       await loadUsers()
-    } catch (err) {
-      setError(err.message || 'Could not create user.')
+    } catch (error) {
+      setActionError(error.message || 'Could not create user.')
     } finally {
       setCreating(false)
     }
   }
 
-  async function runUserAction(user, action) {
+  async function runUserAction(user, action, successMessage) {
     setBusyId(user.id)
-    setError('')
+    setActionError('')
     setMessage('')
     try {
       await action()
+      setMessage(successMessage)
       await loadUsers()
-    } catch (err) {
-      setError(err.message || 'Admin action failed.')
+    } catch (error) {
+      setActionError(error.message || 'Admin action failed.')
     } finally {
       setBusyId('')
     }
   }
 
-  async function handleDelete(user) {
-    const confirmed = window.confirm('Deleting this user permanently removes the account and may remove all data owned by this user.')
-    if (!confirmed) return
-    await runUserAction(user, async () => {
-      await deleteUser(user.id)
-      setMessage(`Deleted ${user.email || 'user'}.`)
-    })
+  function handleApprove(user) {
+    return runUserAction(user, () => approveUser(user.id), 'User approved successfully.')
+  }
+
+  function handleDelete(user) {
+    if (!window.confirm(`Remove ${user.email || 'this user'}? This permanently deletes the account.`)) return
+    return runUserAction(user, () => deleteUser(user.id), 'User account removed.')
   }
 
   async function handleLogout() {
@@ -98,137 +142,23 @@ export function Admin() {
   }
 
   return (
-    <main className="admin-page">
-      <section className="section-dark admin-hero">
-        <div>
-          <p className="eyebrow">System control</p>
-          <h1>User Management</h1>
-          <p>Manage Supabase Auth users, roles, and active account status.</p>
-        </div>
-        <div className="admin-actions">
-          <button type="button" className="button button-secondary" onClick={loadUsers} disabled={loading}>
-            <RefreshCcw size={16} aria-hidden="true" />
-            Refresh
-          </button>
-          <button type="button" className="button button-secondary" onClick={handleLogout}>
-            <LogOut size={16} aria-hidden="true" />
-            Logout
-          </button>
-        </div>
-      </section>
-
-      <section className="card detail-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Create account</p>
-            <h2>Add User</h2>
-          </div>
-        </div>
-        <form className="admin-create-form" onSubmit={handleCreate}>
-          <label>
-            <span>Email</span>
-            <input type="email" value={form.email} autoComplete="email" onChange={(event) => setForm({ ...form, email: event.target.value })} required />
-          </label>
-          <label>
-            <span>Password</span>
-            <input type="password" value={form.password} autoComplete="new-password" minLength={8} onChange={(event) => setForm({ ...form, password: event.target.value })} required />
-          </label>
-          <label>
-            <span>Full name</span>
-            <input value={form.fullName} autoComplete="name" onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
-          </label>
-          <label>
-            <span>Role</span>
-            <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-          <button type="submit" className="button button-primary" disabled={creating}>
-            <UserPlus size={16} aria-hidden="true" />
-            {creating ? 'Creating...' : 'Add User'}
-          </button>
-        </form>
-        {message ? <p className="form-message form-message-success" role="status">{message}</p> : null}
-        {error ? <p className="form-message form-message-error" role="alert">{error}</p> : null}
-      </section>
-
-      <section className="card detail-section">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Accounts</p>
-            <h2>User List</h2>
-          </div>
-        </div>
-        {loading ? <LoadingState label="Loading users..." /> : null}
-        {!loading && error ? <ErrorState message={error} onRetry={loadUsers} /> : null}
-        {!loading && !error && !sortedUsers.length ? <EmptyState title="No users" message="No Auth users were returned." /> : null}
-        {!loading && !error && sortedUsers.length ? (
-          <div className="table-wrap admin-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Name</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Last sign in</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedUsers.map((user) => {
-                  const isSelf = user.id === auth.user?.id
-                  const busy = busyId === user.id
-                  return (
-                    <tr key={user.id}>
-                      <td>{user.email || 'Not available'}</td>
-                      <td>{user.full_name || 'Not available'}</td>
-                      <td>
-                        <select
-                          value={user.role || 'user'}
-                          disabled={busy || isSelf}
-                          aria-label={`Role for ${user.email}`}
-                          onChange={(event) => runUserAction(user, () => setUserRole(user.id, event.target.value))}
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </td>
-                      <td>{user.is_active ? 'Active' : 'Disabled'}</td>
-                      <td>{formatDate(user.created_at)}</td>
-                      <td>{formatDate(user.last_sign_in_at)}</td>
-                      <td>
-                        <div className="admin-row-actions">
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            disabled={busy || isSelf}
-                            onClick={() => runUserAction(user, () => setUserActive(user.id, !user.is_active))}
-                          >
-                            <ShieldCheck size={15} aria-hidden="true" />
-                            {user.is_active ? 'Disable' : 'Activate'}
-                          </button>
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            disabled={busy || isSelf}
-                            onClick={() => handleDelete(user)}
-                          >
-                            <Trash2 size={15} aria-hidden="true" />
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </section>
-    </main>
+    <AdminLayout activeSection={activeSection} adminEmail={auth.user?.email} onLogout={handleLogout} onSectionChange={setActiveSection}>
+      <AdminHeader activeSection={activeSection} loading={loading} onRefresh={loadUsers} lastRefreshed={lastRefreshed} />
+      <AdminOverviewCards
+        pendingCount={pendingLoaded ? pendingUsers.length : null}
+        approvedCount={usersLoaded ? approvedUsers.length : null}
+        totalCount={pendingLoaded && usersLoaded ? allKnownUsers.length : null}
+        recentCount={pendingLoaded && usersLoaded ? recentCount : null}
+      />
+      <div className="admin-section-transition" key={activeSection}>
+        {activeSection === 'pending' ? <PendingUsersPanel users={pendingUsers} loaded={pendingLoaded} error={pendingError} busyId={busyId} onApprove={handleApprove} onRetry={loadUsers} /> : null}
+        {activeSection === 'add' ? <AddUserPanel form={form} creating={creating} error={actionError} message={message} onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))} onSubmit={handleCreate} /> : null}
+        {activeSection === 'users' ? <AllUsersPanel users={approvedUsers} loading={loading} error={usersError} busyId={busyId} authUserId={auth.user?.id} onRetry={loadUsers} onDelete={handleDelete} onSetActive={(user, value) => runUserAction(user, () => setUserActive(user.id, value), 'Account access updated.')} onSetRole={(user, role) => runUserAction(user, () => setUserRole(user.id, role), 'Account role updated.')} /> : null}
+      </div>
+      <div className="admin-live-feedback" aria-live="polite" aria-atomic="true">
+        {message && activeSection !== 'add' ? <p className="admin-feedback is-success">{message}</p> : null}
+        {actionError && activeSection !== 'add' ? <p className="admin-feedback is-error" role="alert">{actionError}</p> : null}
+      </div>
+    </AdminLayout>
   )
 }

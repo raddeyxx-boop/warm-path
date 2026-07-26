@@ -196,7 +196,7 @@
       },
       {
         "parameters": {
-          "jsCode": "return $input.all().map(item => {\n    const p = item.json;\n\n    const ruleScore = p.analysis.warm_score || 0;\n\n    const ai = p.ai_analysis;\n\n    const relationship = ai.relationship_strength.score;\n    const credibility = ai.credibility.score;\n    const company = ai.company_alignment.score;\n    const industry = ai.industry_alignment.score;\n    const reply = ai.likelihood_of_reply.score;\n    const intro = ai.introduction_quality.score;\n\n    // Weighted final score\n    const finalScore = Math.round(\n        ruleScore * 0.30 +\n        relationship * 0.15 +\n        credibility * 0.15 +\n        company * 0.15 +\n        industry * 0.10 +\n        reply * 0.10 +\n        intro * 0.05\n    );\n\n    let finalGrade;\n\n    if (finalScore >= 90)\n        finalGrade = \"A+\";\n    else if (finalScore >= 80)\n        finalGrade = \"A\";\n    else if (finalScore >= 70)\n        finalGrade = \"B\";\n    else if (finalScore >= 60)\n        finalGrade = \"C\";\n    else if (finalScore >= 50)\n        finalGrade = \"D\";\n    else\n        finalGrade = \"F\";\n\n    return {\n        json: {\n            ...p,\n\n            final_score: finalScore,\n            final_grade: finalGrade\n        }\n    };\n});"
+          "jsCode": "return $input.all().map(item => {\n    const p = item.json;\n\n    const ruleScore = p.analysis.warm_score || 0;\n\n    const ai = p.ai_analysis;\n\n    const relationship = ai.relationship_strength.score;\n    const credibility = ai.credibility.score;\n    const company = ai.company_alignment.score;\n    const industry = ai.industry_alignment.score;\n    const reply = ai.likelihood_of_reply.score;\n    const intro = ai.introduction_quality.score;\n\n    // Weighted final score\n    const evidence = ai.relationship_evidence || p.analysis?.relationship_evidence || {};\n    const listLength = value => Array.isArray(value) ? value.filter(Boolean).length : (value && typeof value === \"object\" && value.matched === true ? 1 : 0);\n    const isMatched = value => value === true || (value && typeof value === \"object\" && value.matched === true);\n    let relationshipRankScore = 0;\n    if (isMatched(evidence.same_company)) relationshipRankScore += 25;\n    if (isMatched(evidence.current_employee)) relationshipRankScore += 20;\n    if (listLength(evidence.experience_overlap) > 0) relationshipRankScore += 15;\n    if (isMatched(evidence.same_department)) relationshipRankScore += 12;\n    if (isMatched(evidence.same_school)) relationshipRankScore += 10;\n    if (listLength(evidence.education_overlap) > 0) relationshipRankScore += 8;\n    if (isMatched(evidence.same_location)) relationshipRankScore += 5;\n    relationshipRankScore += Math.min(listLength(evidence.shared_skills) * 1.5, 6);\n    relationshipRankScore += Math.min(listLength(evidence.shared_technologies), 4);\n    relationshipRankScore += Math.min(Math.max(Number(evidence.years_at_company) || 0, 0) * 2, 10);\n    relationshipRankScore = Math.round(Math.min(relationshipRankScore, 100) * 100) / 100;\n    const verifiedEvidenceCount = [evidence.same_company, evidence.current_employee, evidence.same_department, evidence.same_school, evidence.same_location].filter(isMatched).length +\n        [evidence.experience_overlap, evidence.education_overlap, evidence.shared_skills, evidence.shared_technologies].filter(value => listLength(value) > 0).length +\n        (Number(evidence.years_at_company) > 0 ? 1 : 0);\n    const relationshipLabel = relationshipRankScore >= 80 ? \"Strong\" : relationshipRankScore >= 40 ? \"Medium\" : \"Weak\";\n\n    const finalScore = Math.round(\n        ruleScore * 0.30 +\n        relationship * 0.15 +\n        credibility * 0.15 +\n        company * 0.15 +\n        industry * 0.10 +\n        reply * 0.10 +\n        intro * 0.05\n    );\n\n    let finalGrade;\n\n    if (finalScore >= 90)\n        finalGrade = \"A+\";\n    else if (finalScore >= 80)\n        finalGrade = \"A\";\n    else if (finalScore >= 70)\n        finalGrade = \"B\";\n    else if (finalScore >= 60)\n        finalGrade = \"C\";\n    else if (finalScore >= 50)\n        finalGrade = \"D\";\n    else\n        finalGrade = \"F\";\n\n    return {\n        json: {\n            ...p,\n\n            final_score: finalScore,\n            relationship_rank_score: relationshipRankScore,\n            relationship_evidence_score: relationshipRankScore,\n            relationship_label: relationshipLabel,\n            verified_evidence_count: verifiedEvidenceCount,\n            relationship_evidence: evidence,\n            final_grade: finalGrade\n        }\n    };\n});"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -212,8 +212,16 @@
           "sortFieldsUi": {
             "sortField": [
               {
+                "fieldName": "relationship_rank_score",
+                "order": "descending"
+              },
+              {
                 "fieldName": "final_score",
                 "order": "descending"
+              },
+              {
+                "fieldName": "profile.linkedin_url",
+                "order": "ascending"
               }
             ]
           },
@@ -230,7 +238,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const total = $input.all();\n\nreturn total.map((item, index) => {\n  const p = item.json;\n\n  return {\n    json: {\n      rank: index + 1,\n\n      score: p.final_score,\n      grade: p.final_grade,\n\n      name: p.profile.name,\n      linkedin: p.profile.linkedin_url,\n\n      company: p.profile.current_company,\n      position: p.profile.position,\n      location: p.profile.location,\n\n      role: p.analysis.role,\n      seniority: p.analysis.seniority,\n      decision_power: p.analysis.decision_power,\n\n      recommendation: p.ai_analysis.overall_recommendation,\n      explanation: p.ai_analysis.explanation,\n      introduction: p.ai_analysis.personalized_introduction,\n\n      profile: p.profile,\n      analysis: p.analysis,\n      ai_analysis: p.ai_analysis\n    }\n  };\n});"
+          "jsCode": "const total = $input.all();\n\nreturn total.map((item, index) => {\n  const p = item.json;\n\n  return {\n    json: {\n      rank: index + 1,\n\n      score: p.final_score,\n      relationship_rank_score: p.relationship_rank_score,\n      relationship_evidence_score: p.relationship_evidence_score,\n      relationship_label: p.relationship_label,\n      verified_evidence_count: p.verified_evidence_count,\n      relationship_evidence: p.relationship_evidence,\n      grade: p.final_grade,\n\n      name: p.profile.name,\n      linkedin: p.profile.linkedin_url,\n\n      company: p.profile.current_company,\n      position: p.profile.position,\n      location: p.profile.location,\n\n      role: p.analysis.role,\n      seniority: p.analysis.seniority,\n      decision_power: p.analysis.decision_power,\n\n      recommendation: p.ai_analysis.overall_recommendation,\n      explanation: p.ai_analysis.explanation,\n      introduction: p.ai_analysis.personalized_introduction,\n\n      profile: p.profile,\n      analysis: p.analysis,\n      ai_analysis: p.ai_analysis\n    }\n  };\n});"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -246,6 +254,18 @@
           "tableId": "ranked_candidates",
           "fieldsUi": {
             "fieldValues": [
+              {
+                "fieldId": "owner_user_id",
+                "fieldValue": "={{ $('Webhook').first().json.body.owner_user_id }}"
+              },
+              {
+                "fieldId": "workflow_run_id",
+                "fieldValue": "={{ $('Webhook').first().json.body.workflow_run_id }}"
+              },
+              {
+                "fieldId": "search_request_id",
+                "fieldValue": "={{ $('Webhook').first().json.body.search_request_id }}"
+              },
               {
                 "fieldId": "rank",
                 "fieldValue": "={{ $json.rank }}"
@@ -317,6 +337,26 @@
               {
                 "fieldId": "ai_analysis",
                 "fieldValue": "={{ $json.ai_analysis }}"
+              },
+              {
+                "fieldId": "relationship_rank_score",
+                "fieldValue": "={{ $json.relationship_rank_score }}"
+              },
+              {
+                "fieldId": "relationship_evidence",
+                "fieldValue": "={{ $json.relationship_evidence }}"
+              },
+              {
+                "fieldId": "relationship_evidence_score",
+                "fieldValue": "={{ $json.relationship_evidence_score }}"
+              },
+              {
+                "fieldId": "relationship_label",
+                "fieldValue": "={{ $json.relationship_label }}"
+              },
+              {
+                "fieldId": "verified_evidence_count",
+                "fieldValue": "={{ $json.verified_evidence_count }}"
               }
             ]
           }
@@ -339,7 +379,21 @@
       {
         "parameters": {
           "operation": "delete",
-          "tableId": "ranked_candidates"
+          "tableId": "ranked_candidates",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "owner_user_id",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.owner_user_id }}"
+              },
+              {
+                "keyName": "workflow_run_id",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.workflow_run_id }}"
+              }
+            ]
+          }
         },
         "type": "n8n-nodes-base.supabase",
         "typeVersion": 1,
@@ -363,9 +417,14 @@
           "filters": {
             "conditions": [
               {
-                "keyName": "id",
-                "condition": "gt",
-                "keyValue": "0"
+                "keyName": "owner_user_id",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.owner_user_id }}"
+              },
+              {
+                "keyName": "workflow_run_id",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.workflow_run_id }}"
               }
             ]
           }

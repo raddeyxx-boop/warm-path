@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { initializeTargetSearch, prepareInitializedTargetSearch } from '../services/targetSearchService'
+import { normalizeSubmissionForm, submitTargetSearchOnce } from '../services/targetSearchSubmission'
 
 const initialForm = {
   targetName: '',
@@ -30,6 +31,7 @@ export function FindTarget() {
   const [result, setResult] = useState(null)
   const [pendingInitialization, setPendingInitialization] = useState(null)
   const [submitError, setSubmitError] = useState('')
+  const submissionInFlightRef = useRef(false)
   const errors = getRequiredErrors(form)
 
   function handleChange(event) {
@@ -50,6 +52,7 @@ export function FindTarget() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    if (submissionInFlightRef.current) return
     const nextErrors = getRequiredErrors(form)
 
     if (Object.keys(nextErrors).length) {
@@ -58,32 +61,36 @@ export function FindTarget() {
       return
     }
 
-    const normalizedForm = Object.fromEntries(
-      Object.entries(form).map(([key, value]) => [key, value.trim()]),
-    )
+    const normalizedForm = normalizeSubmissionForm(form)
     setForm(normalizedForm)
     setSubmitPhase('initializing')
     setResult(null)
     setSubmitError('')
 
     try {
-      let initialization = pendingInitialization
-      if (!initialization) {
-        initialization = await initializeTargetSearch(normalizedForm)
-        if (!initialization.ok) {
-          setSubmitError(initialization.message)
-          setResult(initialization)
-          return
-        }
-        setPendingInitialization(initialization)
-        setForm(initialization.normalizedForm)
+      const submission = await submitTargetSearchOnce({
+        lock: submissionInFlightRef,
+        form: normalizedForm,
+        pendingInitialization,
+        initialize: initializeTargetSearch,
+        prepare: prepareInitializedTargetSearch,
+        onInitialized: (initialization) => {
+          if (!pendingInitialization) {
+            setPendingInitialization(initialization)
+          }
+          setForm(initialization.normalizedForm)
+        },
+        onPreparing: () => setSubmitPhase('preparing'),
+      })
+      if (submission.ignored) return
+
+      const { initialization, preparation } = submission
+      if (!initialization.ok) {
+        setSubmitError(initialization.message)
+        setResult(initialization)
+        return
       }
 
-      setSubmitPhase('preparing')
-      const preparation = await prepareInitializedTargetSearch(
-        initialization.workflowRunId,
-        initialization.searchRequestId,
-      )
       setResult({ ...initialization, preparation })
       setPendingInitialization(null)
       navigate('/runs')
@@ -138,7 +145,7 @@ export function FindTarget() {
           <div className="target-form-grid">
             {renderField({ name: 'targetName', label: 'Target Name', placeholder: 'e.g. Sarah Chen', required: true })}
             {renderField({ name: 'currentCompany', label: 'Current Company', placeholder: 'e.g. Stripe', required: true })}
-            {renderField({ name: 'linkedinName', label: 'LinkedIn Name', placeholder: 'Name as shown on LinkedIn', required: true })}
+            {renderField({ name: 'linkedinName', label: 'LinkedIn URL', placeholder: 'https://www.linkedin.com/in/...', required: true })}
             {renderField({ name: 'location', label: 'Location', placeholder: 'e.g. San Francisco Bay Area', required: true })}
           </div>
         </section>

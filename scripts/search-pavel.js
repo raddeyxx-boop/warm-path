@@ -1,18 +1,10 @@
 const {
     loadTargetProfile
 } = require("../utils/loadTargetProfile");
+const { saveTargetProfile } = require("../utils/saveTargetProfile");
+const { mergeTargetProfile } = require("../utils/mergeTargetProfile");
+const { scrapeProfile } = require("./scrape-profile-details");
 
-const {
-    mergeTargetProfile
-} = require("../utils/mergeTargetProfile");
-
-const {
-    saveTargetProfile
-} = require("../utils/saveTargetProfile");
-
-const {
-    scrapeProfile
-} = require("./scrape-profile-details");
 const {
     HUMAN_BEHAVIOR_CONFIG
 } = require("../utils/HumanBehaviorConfig");
@@ -22,9 +14,16 @@ const {
 
 const fs = require("fs");
 const path = require("path");
+const { resilientClick } = require("../services/playwright-actions");
+const { emitProgress } = require("../utils/ProgressEvents");
 
 const LINKEDIN_HOME_URL = "https://www.linkedin.com/feed/";
-const SEARCH_INPUT_SELECTOR = 'input[placeholder*="Search"]';
+const SEARCH_INPUT_SELECTOR = [
+    'input[role="combobox"][placeholder*="Search" i]',
+    'input[aria-label*="Search" i]',
+    'input[placeholder*="Search" i]',
+    'header input[type="text"]'
+].join(", ");
 
 function cleanText(value) {
     return (value || "").toString().replace(/\s+/g, " ").trim();
@@ -49,6 +48,46 @@ function normalizeProfileUrl(value) {
     }
 }
 
+function validateLinkedInProfileUrl(value) {
+    const input = cleanText(value);
+    const withProtocol = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+
+    try {
+        const url = new URL(withProtocol);
+        const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+        const profileMatch = url.pathname.match(/^\/in\/([^/]+)\/?$/i);
+
+        if (hostname !== "linkedin.com" || !profileMatch?.[1]) {
+            throw new Error("not a LinkedIn profile URL");
+        }
+
+        return `https://www.linkedin.com/in/${profileMatch[1]}`;
+    } catch (err) {
+        throw new Error("LinkedIn profile URL is invalid.", { cause: err });
+    }
+}
+
+function normalizeLinkedInProfilePath(value) {
+    if (!value) return "";
+
+    try {
+        const parsed = new URL(value, "https://www.linkedin.com");
+        const pathname = parsed.pathname.replace(/\/+$/, "").toLowerCase();
+        return pathname.startsWith("/in/") ? pathname : "";
+    } catch (err) {
+        return "";
+    }
+}
+
+function normalizeName(value) {
+    return String(value || "")
+        .normalize("NFKD")
+        .replace(/[^\p{L}\p{N}\s]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase();
+}
+
 function isUnexpectedLinkedInUrl(value) {
     return /\/login|\/checkpoint|\/uas\/login|\/404/i.test(value || "");
 }
@@ -64,15 +103,14 @@ function firstNonEmpty(values) {
 }
 
 function getTargetCompany(target = {}) {
-    const currentExperience = Array.isArray(target.experience)
-        ? target.experience.find(item => item?.duration?.currently_working === true)
-        : null;
-
     return firstNonEmpty([
+        target.company_filter,
         target.company,
-        target.current_company,
-        currentExperience?.company
     ]);
+}
+
+function getTargetSchool(target = {}) {
+    return cleanText(target.school_filter);
 }
 
 async function naturalPause(page, minMs = 300, maxMs = 800) {
@@ -83,22 +121,10 @@ async function findVisibleLocator(locator, timeout = 1500) {
     const deadline = Date.now() + timeout;
 
     while (Date.now() <= deadline) {
-        const handles = await locator.elementHandles().catch(() => []);
-
-        for (const handle of handles) {
-            const visible = await handle.evaluate(element => {
-                const rect = element.getBoundingClientRect();
-                const style = window.getComputedStyle(element);
-
-                return rect.width > 0 &&
-                    rect.height > 0 &&
-                    style.visibility !== "hidden" &&
-                    style.display !== "none";
-            }).catch(() => false);
-
-            if (visible) {
-                return handle;
-            }
+        const count = await locator.count().catch(() => 0);
+        for (let index = 0; index < count; index += 1) {
+            const candidate = locator.nth(index);
+            if (await candidate.isVisible({ timeout: 250 }).catch(() => false)) return candidate;
         }
 
         await new Promise(resolve => setTimeout(resolve, 120));
@@ -114,17 +140,12 @@ function filterValuePattern(value) {
 }
 
 async function clickNaturally(page, locator) {
-    await locator.scrollIntoViewIfNeeded({
-        timeout: 3000
-    }).catch(() => {});
     await moveMouseToLocator(page, locator).catch(() => {});
-    await locator.hover({
-        timeout: 2000
-    }).catch(() => {});
-    await naturalPause(page, 300, 800);
-    await locator.click({
+    return resilientClick(locator, {
+        context: "search-pavel.clickNaturally", page,
         delay: randomInt(90, 190),
-        timeout: 5000
+        timeout: 5000,
+        pauseBeforeClick: () => naturalPause(page, 300, 800)
     });
 }
 
@@ -215,6 +236,14 @@ function currentCompaniesSectionLocator(scope) {
     }).or(scope.getByRole("button", {
         name: sectionPattern
     })).or(scope.getByText(sectionPattern));
+}
+
+function schoolsSectionLocator(scope) {
+    return scope.getByRole("heading", {
+        name: /^schools?$/i
+    }).or(scope.getByRole("button", {
+        name: /^schools?$/i
+    })).or(scope.getByText(/^schools?$/i));
 }
 
 async function getPeopleFiltersDialog(page) {
@@ -371,6 +400,26 @@ async function revealCurrentCompaniesSection(page, dialog, scrollContainer) {
     throw new Error("Current companies section was not visible inside People filters dialog.");
 }
 
+async function revealSchoolsSection(page, dialog, scrollContainer) {
+    const section = schoolsSectionLocator(dialog);
+
+    console.log("Searching Schools inside People Filters...");
+    for (let attempt = 1; attempt <= 12; attempt++) {
+        const visibleSection = await findVisibleLocator(section, 700);
+
+        if (visibleSection) {
+            console.log("Schools found.");
+            await naturalPause(page, 600, 1300);
+            return;
+        }
+
+        // Once the modal is open, only its own scroll container may move.
+        await scrollPeopleFilters(page, scrollContainer);
+    }
+
+    throw new Error("Schools section was not visible inside People Filters dialog.");
+}
+
 
 async function openFilters(page) {
 
@@ -406,11 +455,7 @@ async function searchCompanyFilterValue(page, dialog, scrollContainer, value) {
         return;
     }
 
-    await clickNaturally(page, typeaheadInput);
-    await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
-    await naturalPause(page, 120, 280);
-    await page.keyboard.press("Backspace");
-    await naturalPause(page, 180, 420);
+    await prepareSearchBox(typeaheadInput);
     await typeLikeHuman(page, value);
     await naturalPause(page, 1200, 2200);
 }
@@ -440,13 +485,22 @@ async function selectFilterCheckbox(page, dialog, value, label) {
         return checkbox;
     }
 
-    await clickNaturally(page, checkbox);
+    await checkbox.waitFor({ state: "visible", timeout: 5000 });
+    await checkbox.scrollIntoViewIfNeeded({ timeout: 3000 });
+    await moveMouseToLocator(page, checkbox).catch(error => {
+        logRecoverable("selectFilterCheckbox", error.message, "continue with locator.check()");
+    });
+    await checkbox.hover({ timeout: 2000 }).catch(error => {
+        logRecoverable("selectFilterCheckbox", error.message, "continue with locator.check()");
+    });
     await naturalPause(page, 900, 1800);
-
-    if (!(await checkbox.isChecked().catch(() => false))) {
+    try {
         await checkbox.check({
             timeout: 5000
-        }).catch(() => {});
+        });
+    } catch (error) {
+        logRecoverable("selectFilterCheckbox", error.message, "retry check with force as last resort");
+        await checkbox.check({ timeout: 3000, force: true });
     }
 
     if (!(await checkbox.isChecked().catch(() => false))) {
@@ -471,6 +525,42 @@ async function selectCompany(page, dialog, scrollContainer, company) {
     await selectFilterCheckbox(page, dialog, companyName, "Company");
     console.log("Company selected.");
 
+    return true;
+}
+
+async function searchSchoolFilterValue(page, dialog, scrollContainer, value) {
+    const inputPattern = /school|add a school|search school/i;
+
+    await revealSchoolsSection(page, dialog, scrollContainer);
+    const typeaheadInput = await findVisibleLocator(
+        dialog.getByRole("textbox", {
+            name: inputPattern
+        }).or(dialog.getByPlaceholder(inputPattern)),
+        1200
+    );
+
+    if (!typeaheadInput) {
+        console.log("School search box not visible. Looking for existing school options.");
+        return;
+    }
+
+    await prepareSearchBox(typeaheadInput);
+    await typeLikeHuman(page, value);
+    await naturalPause(page, 1200, 2200);
+}
+
+async function selectSchool(page, dialog, scrollContainer, school) {
+    const schoolName = cleanText(school);
+
+    if (!schoolName) {
+        console.log("No school available. Skipping school filter.");
+        return false;
+    }
+
+    console.log("Selecting school:", schoolName);
+    await searchSchoolFilterValue(page, dialog, scrollContainer, schoolName);
+    await selectFilterCheckbox(page, dialog, schoolName, "School");
+    console.log("School selected.");
     return true;
 }
 
@@ -519,13 +609,19 @@ async function showResults(page, dialog) {
         timeout: 15000
     });
 
-    await waitForFilteredResults(page);
+    return await waitForFilteredResults(page);
 }
 
 async function verifyFilterSelected(dialog, value, label) {
-    const checkbox = await findFilterCheckbox(dialog, value);
+    const exactPattern = filterValuePattern(value);
+    const escapedPattern = new RegExp(escapeRegExp(value), "i");
+    const checkbox = dialog.getByRole("checkbox", {
+        name: exactPattern
+    }).or(dialog.getByRole("checkbox", {
+        name: escapedPattern
+    })).first();
 
-    if (!checkbox) {
+    if (!(await checkbox.count())) {
         throw new Error(`${label} filter verification failed: checkbox not found.`);
     }
 
@@ -534,8 +630,16 @@ async function verifyFilterSelected(dialog, value, label) {
     }
 }
 
-async function verifySelectedFilters(dialog, company) {
-    await verifyFilterSelected(dialog, company, "Company");
+async function verifySelectedFilters(dialog, company, school = "") {
+    if (cleanText(company)) {
+        await verifyFilterSelected(dialog, company, "Company");
+        console.log("Company filter applied successfully.");
+    }
+
+    if (cleanText(school)) {
+        await verifyFilterSelected(dialog, school, "School");
+        console.log("School filter applied successfully.");
+    }
 }
 
 async function waitForFilteredResults(page) {
@@ -543,20 +647,75 @@ async function waitForFilteredResults(page) {
         timeout: 15000
     }).catch(() => {});
 
-    await page.waitForFunction(() => {
+    const stateHandle = await page.waitForFunction(() => {
         const mainText = (document.querySelector("main")?.innerText || "")
             .replace(/\s+/g, " ")
             .trim();
-        const hasPeopleResults = document.querySelectorAll('main a[href*="/in/"]').length > 0;
+        const hasPeopleResults = document.querySelectorAll(`
+            main [data-view-name="search-entity-result-universal-template"] a[href*="/in/"],
+            main li a[href*="/in/"],
+            main a[href*="/in/"]
+        `).length > 0;
+        const hasNoResults = /no results found|no matching results|try changing or removing some of your filters/i.test(mainText);
 
-        return /\/search\/results\/people/i.test(window.location.href) &&
-            (hasPeopleResults || /people|results|connections/i.test(mainText));
+        if (!/\/search\/results\/people/i.test(window.location.href)) return false;
+        if (hasPeopleResults) return "results";
+        if (hasNoResults) return "empty";
+        return false;
     }, undefined, {
         timeout: 15000
     });
+    const resultState = await stateHandle.jsonValue();
 
     await naturalPause(page, 1800, 3400);
-    console.log("Filtered results loaded.");
+    if (resultState === "empty") {
+        console.log("No mutual connections matched the selected filters.");
+    } else {
+        console.log("Search results detected.");
+    }
+
+    return resultState;
+}
+
+async function verifyActiveFilterState(page, requested = {}) {
+    const requestedCompany = cleanText(requested.company);
+    const requestedSchool = cleanText(requested.school);
+    const state = await page.evaluate(() => {
+        const activeButtons = [...document.querySelectorAll("button")]
+            .filter(button => {
+                const classes = button.className?.toString() || "";
+                return button.getAttribute("aria-pressed") === "true" ||
+                    /\b(active|selected|checked)\b/i.test(classes);
+            })
+            .map(button => (button.innerText || button.textContent || "").replace(/\s+/g, " ").trim());
+        const url = window.location.href;
+
+        return {
+            activeButtons,
+            companyActive: /[?&](?:currentCompany|facetCurrentCompany)=/i.test(url),
+            schoolActive: /[?&](?:schoolFilter|facetSchool)=/i.test(url)
+        };
+    });
+    const activeText = state.activeButtons.join(" ").toLowerCase();
+    const companyActive = state.companyActive ||
+        Boolean(requestedCompany && activeText.includes(requestedCompany.toLowerCase()));
+    const schoolActive = state.schoolActive ||
+        Boolean(requestedSchool && activeText.includes(requestedSchool.toLowerCase()));
+
+    if (requestedCompany && !companyActive) {
+        throw new Error("Requested Company filter is not active after Show Results.");
+    }
+    if (!requestedCompany && state.companyActive) {
+        throw new Error("Unexpected Company filter is active after Show Results.");
+    }
+    if (requestedSchool && !schoolActive) {
+        throw new Error("Requested School filter is not active after Show Results.");
+    }
+    if (!requestedSchool && state.schoolActive) {
+        throw new Error("Unexpected School filter is active after Show Results.");
+    }
+
+    console.log("Active LinkedIn filters match the requested configuration.");
 }
 
 async function openLinkedInFeed(page) {
@@ -674,6 +833,7 @@ async function performInitialTargetSearchWarmup(page) {
         return;
     }
 
+    emitProgress("human_browsing");
     await performInitialHomeFeedCommentSession(page, {
         openLinkedInHome: openLinkedInFeed,
         scrollPage: scrollFeed,
@@ -693,8 +853,10 @@ async function performInitialTargetSearchWarmup(page) {
 }
 
 async function getSearchBox(page) {
-
-const searchBox = page.locator(SEARCH_INPUT_SELECTOR).first();
+    const searchBox = page.getByRole("combobox", { name: /search/i })
+        .or(page.getByRole("searchbox", { name: /search/i }))
+        .or(page.locator(SEARCH_INPUT_SELECTOR))
+        .first();
 
     await searchBox.waitFor({
         state: "visible",
@@ -752,46 +914,33 @@ async function moveMouseToLocator(page, locator) {
 }
 
 async function prepareSearchBox(searchBox) {
-
-    await searchBox.hover({
-        timeout: 2000
-    }).catch(() => {});
-    await searchBox.page().waitForTimeout(400 + Math.floor(Math.random() * 800));
-    await searchBox.click({
-        delay: 90 + Math.floor(Math.random() * 140),
-        timeout: 5000
-    });
-
-    if (Math.random() < 0.18) {
-        await searchBox.page().waitForTimeout(180 + Math.floor(Math.random() * 360));
-        await searchBox.click({
-            delay: 80 + Math.floor(Math.random() * 120),
-            timeout: 3000
-        }).catch(() => {});
-    }
-
-    await searchBox.page().waitForTimeout(500 + Math.floor(Math.random() * 1000));
-
-    await searchBox.page().keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
-    await searchBox.page().waitForTimeout(180 + Math.floor(Math.random() * 420));
-
-    if (Math.random() < 0.35) {
-        const currentText = await searchBox.inputValue().catch(() => "");
-
-        for (let i = 0; i < Math.min(currentText.length, 24); i++) {
-            await searchBox.page().keyboard.press("Backspace");
-            await searchBox.page().waitForTimeout(35 + Math.floor(Math.random() * 95));
-        }
-    } else {
-        await searchBox.page().keyboard.press("Backspace");
-    }
+    await searchBox.waitFor({ state: "visible", timeout: 5000 });
+    await searchBox.scrollIntoViewIfNeeded();
+    await searchBox.click({ timeout: 5000 });
+    await searchBox.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+    await searchBox.press("Backspace");
 
     await searchBox.page().waitForTimeout(220 + Math.floor(Math.random() * 520));
-
 }
 
+async function typeTargetNameIntoSearch(page, searchBox, targetName, humanTyper = typeLikeHuman) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+        await prepareSearchBox(searchBox);
+        await humanTyper(page, targetName);
+        const actualValue = await searchBox.inputValue();
 
+        console.log("[TARGET_SEARCH_INPUT]", {
+            expected: targetName,
+            actual: actualValue
+        });
 
+        if (normalizeName(actualValue) === normalizeName(targetName)) {
+            return;
+        }
+    }
+
+    throw new Error("Failed to type target name into LinkedIn search.");
+}
 
 async function typeLikeHuman(page, text) {
 
@@ -842,19 +991,12 @@ async function clickLikeHuman(locator, pageOverride = null) {
     const page = pageOverride ||
         (typeof locator.page === "function" ? locator.page() : null);
 
-    await locator.hover({
-        timeout: 2000
-    }).catch(() => {});
-
-    if (page) {
-        await page.waitForTimeout(300 + Math.floor(Math.random() * 500));
-    }
-
-    await locator.click({
+    return resilientClick(locator, {
+        context: "search-pavel.clickLikeHuman", page,
         delay: 70 + Math.floor(Math.random() * 110),
-        timeout: 7000
+        timeout: 7000,
+        pauseBeforeClick: page ? () => page.waitForTimeout(300 + Math.floor(Math.random() * 500)) : null
     });
-
 }
 
 async function collectConnectionCandidates(page) {
@@ -862,14 +1004,13 @@ async function collectConnectionCandidates(page) {
         const clean = value => (value || "").replace(/\s+/g, " ").trim();
 
         return links
-            .map((link, index) => {
+            .map(link => {
                 const rect = link.getBoundingClientRect();
                 const href = link.href || link.getAttribute("href") || "";
                 const text = clean(link.innerText || link.textContent);
                 const style = window.getComputedStyle(link);
 
                 return {
-                    index,
                     text,
                     href,
                     visible: rect.width > 0 &&
@@ -892,7 +1033,7 @@ async function markConnectionCandidate(page, candidate) {
 
     const marker = `connections-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    const marked = await page.evaluate(({ index, href, markerValue }) => {
+    const marked = await page.evaluate(({ href, markerValue }) => {
         const clean = value => (value || "").replace(/\s+/g, " ").trim();
         const links = [...document.querySelectorAll("a")];
 
@@ -900,11 +1041,10 @@ async function markConnectionCandidate(page, candidate) {
             link.removeAttribute("data-wpf-connections-link");
         }
 
-        const target = links[index] ||
-            links.find(link =>
-                (link.href || link.getAttribute("href") || "") === href &&
-                clean(link.innerText || link.textContent).toLowerCase().includes("connections")
-            );
+        const target = links.find(link =>
+            (link.href || link.getAttribute("href") || "") === href &&
+            clean(link.innerText || link.textContent).toLowerCase().includes("connections")
+        );
 
         if (!target) {
             return false;
@@ -913,7 +1053,6 @@ async function markConnectionCandidate(page, candidate) {
         target.setAttribute("data-wpf-connections-link", markerValue);
         return true;
     }, {
-        index: candidate.index,
         href: candidate.href,
         markerValue: marker
     }).catch(() => false);
@@ -1088,6 +1227,8 @@ async function waitForProfileToLoad(page, expectedUrl = "") {
 
 async function openConnections(page) {
 
+    emitProgress("opening_connections");
+
     console.log("Opening Connections...");
 
     console.log("Looking for 500+ connections...");
@@ -1107,45 +1248,145 @@ async function openConnections(page) {
     const connectionsUrl = new URL(selected.href, page.url()).href;
     console.log("Found:", selected.text || "connections link");
 
-    if (selected.visible) {
-        const marker = await markConnectionCandidate(page, selected);
-        const connectionLink = marker
-            ? page.locator(connectionMarkerSelector(marker))
-            : null;
-
-        try {
-            if (!connectionLink) {
-                throw new Error("Connections link could not be re-identified after DOM scan.");
-            }
-
-            await connectionLink.scrollIntoViewIfNeeded({
-                timeout: 2000
-            }).catch(() => {});
-            await clickLikeHuman(connectionLink);
-            return connectionsUrl;
-        } catch (err) {
-            logRecoverable(
-                "openConnections",
-                "connections click failed: " + err.message,
-                "opening captured connections URL directly"
-            );
-        }
-    } else {
-        logRecoverable(
-            "openConnections",
-            "connections link was found but not visible",
-            "opening captured connections URL directly"
-        );
-
+    if (!selected.visible) {
+        throw new Error("Connections link was found but could not be made visible for a human click.");
     }
 
-    await page.goto(connectionsUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: 20000
-    });
+    const marker = await markConnectionCandidate(page, selected);
+    const connectionLink = marker
+        ? page.locator(connectionMarkerSelector(marker))
+        : null;
+
+    if (!connectionLink) {
+        throw new Error("Connections link could not be re-identified after DOM scan.");
+    }
+
+    await connectionLink.scrollIntoViewIfNeeded({ timeout: 2000 });
+    await naturalPause(page, 350, 800);
+    await clickLikeHuman(connectionLink, page);
 
     return connectionsUrl;
 
+}
+
+async function scrollTargetProfileUntilStable(page) {
+    console.log("TARGET_PROFILE_SCROLL_STARTED");
+    let stableCycles = 0;
+    let previousHeight = 0;
+    let previousScrollY = -1;
+
+    for (let cycle = 1; cycle <= 16; cycle += 1) {
+        const before = await page.evaluate(() => ({
+            scrollY: window.scrollY,
+            height: document.documentElement.scrollHeight,
+            viewport: window.innerHeight
+        }));
+        const distance = Math.max(180, Math.round(before.viewport * 0.65));
+        await scrollPageLikeHuman(page, distance);
+        await naturalPause(page, 700, 1400);
+        const after = await page.evaluate(() => ({
+            scrollY: window.scrollY,
+            height: document.documentElement.scrollHeight
+        }));
+        const atBottom = after.scrollY + before.viewport >= after.height - 30;
+        const unchanged = after.height === previousHeight && after.scrollY === previousScrollY;
+        stableCycles = atBottom && unchanged ? stableCycles + 1 : 0;
+        previousHeight = after.height;
+        previousScrollY = after.scrollY;
+        console.log("TARGET_PROFILE_SCROLL_CYCLE", {
+            cycle,
+            scrollY: after.scrollY,
+            documentHeight: after.height,
+            atBottom,
+            stableCycles
+        });
+        if (stableCycles >= 3) break;
+    }
+
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    await naturalPause(page, 800, 1400);
+    if (!/linkedin\.com\/in\//i.test(page.url())) {
+        throw new Error("Target profile URL changed during target-profile scrolling.");
+    }
+    console.log("TARGET_PROFILE_STABLE");
+}
+
+async function extractTargetSupplementalDetails(page) {
+    return page.evaluate(() => {
+        const clean = value => (value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+        const sectionByHeading = pattern => [...document.querySelectorAll("main section")]
+            .filter(section => !section.closest("aside"))
+            .find(section => pattern.test(clean(
+                section.querySelector("h2, h3, [role='heading']")?.innerText ||
+                section.querySelector("[aria-hidden='true']")?.innerText
+            )));
+        const usefulLines = section => section
+            ? [...section.querySelectorAll("li, [role='listitem'], article")]
+                .map(item => clean(item.innerText))
+                .filter(Boolean)
+                .slice(0, 10)
+            : [];
+        const activitySection = sectionByHeading(/^(Activity|Recent activity)$/i);
+        const mutualSection = sectionByHeading(/mutual connections?/i);
+        const mutualLinks = mutualSection
+            ? [...mutualSection.querySelectorAll('a[href*="/in/"]')]
+                .map(link => ({
+                    name: clean(link.innerText).split("\n")[0],
+                    linkedin_url: link.href.split("?")[0]
+                }))
+                .filter(item => item.name && item.linkedin_url)
+                .slice(0, 20)
+            : [];
+
+        return {
+            recent_activity: usefulLines(activitySection),
+            mutual_connections: mutualLinks
+        };
+    }).catch(() => ({ recent_activity: [], mutual_connections: [] }));
+}
+
+async function processTargetProfile(page, target) {
+    const expectedUrl = normalizeProfileUrl(target.linkedin_url || target.url);
+    console.log("[TARGET] Reading profile header");
+    console.log("[TARGET] Scrolling through profile");
+
+    // scrapeProfile fully awaits the existing human-reading, lazy-rendering, and
+    // section retry pipeline before returning any target data.
+    const extracted = await scrapeProfile(page, { targetProfile: true });
+
+    if (expectedUrl && normalizeProfileUrl(page.url()) !== expectedUrl) {
+        throw new Error("Target profile changed before extraction completed.");
+    }
+    if (!cleanText(extracted.name)) {
+        throw new Error("Target profile extraction did not return a name.");
+    }
+    const { assertTargetProfileMatch } = await import("../types/target-search-request.ts");
+    assertTargetProfileMatch(target, extracted, page.url());
+    console.log("[TARGET] Identity verified", {
+        workflow_run_id: process.env.WORKFLOW_RUN_ID || null,
+        search_request_id: process.env.SEARCH_REQUEST_ID || null,
+        requested_name: target.name,
+        extracted_name: extracted.name,
+        requested_linkedin_url: target.linkedin_url || target.url || null,
+        extracted_linkedin_url: extracted.linkedin_url || page.url()
+    });
+
+    console.log("[TARGET] Reading About section");
+    console.log("[TARGET] Reading Experience section");
+    console.log("[TARGET] Reading Education section");
+    console.log("[TARGET] Reading Skills section");
+    console.log("[TARGET] Reading activity and mutual connections");
+    const supplemental = await extractTargetSupplementalDetails(page);
+    const merged = mergeTargetProfile(target, { ...extracted, ...supplemental });
+    saveTargetProfile(merged);
+
+    const stored = loadTargetProfile();
+    if (!cleanText(stored.name) || normalizeProfileUrl(stored.linkedin_url || stored.url) !== normalizeProfileUrl(merged.linkedin_url || merged.url)) {
+        throw new Error("Stored target profile failed completion verification.");
+    }
+
+    console.log("[TARGET] Target profile extraction completed");
+    return stored;
 }
 
 async function waitForConnectionsPage(page, expectedUrl = "") {
@@ -1156,21 +1397,12 @@ async function waitForConnectionsPage(page, expectedUrl = "") {
             isUnexpectedLinkedInUrl(url.href);
     }, {
         timeout: 12000
-    }).catch(async err => {
-        if (!expectedHref) {
-            throw err;
-        }
-
-        logRecoverable(
-            "waitForConnectionsPage",
-            "SPA click did not verify connections URL: " + err.message,
-            "opening captured connections URL directly"
+    }).catch(err => {
+        throw new Error(
+            "Connections click did not complete the expected page transition" +
+            (expectedHref ? ` to ${expectedHref}` : "") +
+            ": " + err.message
         );
-
-        await page.goto(expectedHref, {
-            waitUntil: "domcontentloaded",
-            timeout: 20000
-        });
     });
 
     if (isUnexpectedLinkedInUrl(page.url())) {
@@ -1210,9 +1442,16 @@ async function waitForConnectionsPage(page, expectedUrl = "") {
 async function applyConnectionFilters(page, target) {
 
     const company = getTargetCompany(target);
+    const school = getTargetSchool(target);
 
-    if (!company) {
-        throw new Error("Company filter is mandatory, but target.json has no company/current_company.");
+    console.log("Target configuration loaded.");
+    console.log("Company:", company || "None");
+    console.log("School:", school || "None");
+    console.log("Keywords:", cleanText(target.keywords) || "None");
+
+    if (!company && !school) {
+        console.log("No Company or School filter requested. Keeping current Connections results.");
+        return await waitForFilteredResults(page);
     }
 
     let lastError;
@@ -1228,11 +1467,26 @@ async function applyConnectionFilters(page, target) {
                 scrollContainer
             } = await openFilters(page);
 
-            await selectCompany(page, dialog, scrollContainer, company);
-            await naturalPause(page, 900, 1800);
-            await verifySelectedFilters(dialog, company);
-            await showResults(page, dialog);
-            return;
+            if (company) {
+                console.log("Company detected. Applying Company filter.");
+                await selectCompany(page, dialog, scrollContainer, company);
+                await naturalPause(page, 900, 1800);
+            } else {
+                console.log("Company not requested. Skipping Company filter.");
+            }
+
+            if (school) {
+                console.log("School detected. Applying School filter.");
+                await selectSchool(page, dialog, scrollContainer, school);
+                await naturalPause(page, 700, 1500);
+            } else {
+                console.log("School not requested. Skipping School filter.");
+            }
+
+            await verifySelectedFilters(dialog, company, school);
+            const resultState = await showResults(page, dialog);
+            await verifyActiveFilterState(page, { company, school });
+            return resultState;
         } catch (err) {
             lastError = err;
             console.log("Connection filter workflow failed:", err.message);
@@ -1256,120 +1510,227 @@ async function applyConnectionFilters(page, target) {
 
 async function getSearchSuggestions(page) {
 
-    const suggestions = page.locator('[role="listbox"] a[href*="/in/"]');
+    const profileAnchors = page.locator('[role="listbox"] a[href*="/in/"]');
 
-    await suggestions.first().waitFor({
+    await profileAnchors.first().waitFor({
         state: "visible",
         timeout: 10000
     });
 
     console.log("Suggestions appeared.");
 
-    return suggestions;
+    const containers = page.locator(
+        '[role="listbox"] [role="option"]:has(a[href*="/in/"]), ' +
+        '[role="listbox"] li:has(a[href*="/in/"])'
+    );
+
+    return await containers.count().catch(() => 0) > 0 ? containers : profileAnchors;
 
 }
 
+async function profileAnchorForSuggestion(suggestion, normalizedTargetHref) {
+    const directHref = await suggestion.getAttribute("href").catch(() => "");
+    if (normalizeLinkedInProfilePath(directHref)) {
+        return { anchor: suggestion, href: directHref };
+    }
+
+    const anchors = suggestion.locator('a[href*="/in/"]');
+    const anchorCount = await anchors.count().catch(() => 0);
+    let firstValid = null;
+
+    for (let anchorIndex = 0; anchorIndex < anchorCount; anchorIndex += 1) {
+        const anchor = anchors.nth(anchorIndex);
+        const href = await anchor.getAttribute("href").catch(() => "");
+        const normalizedHref = normalizeLinkedInProfilePath(href);
+        if (!normalizedHref) continue;
+        if (!firstValid) firstValid = { anchor, href };
+        if (normalizedTargetHref && normalizedHref === normalizedTargetHref) {
+            return { anchor, href };
+        }
+    }
+
+    return firstValid;
+}
+
+async function clickMatchedProfileAnchor(page, match, normalizedTargetHref) {
+    console.log("Selected suggestion:", { text: match.text, href: match.href });
+    await match.anchor.scrollIntoViewIfNeeded();
+    await match.anchor.click({ timeout: 10000 });
+
+    if (normalizedTargetHref) {
+        await page.waitForURL(
+            url => normalizeLinkedInProfilePath(url.toString()) === normalizedTargetHref,
+            { timeout: 30000 }
+        );
+    } else {
+        await waitForProfileToLoad(page);
+    }
+
+    const openedPath = normalizeLinkedInProfilePath(page.url());
+    if (!openedPath || (normalizedTargetHref && openedPath !== normalizedTargetHref)) {
+        throw new Error("Selected LinkedIn suggestion did not open the requested profile.");
+    }
+
+    console.log("Target profile opened successfully.");
+}
+
+async function selectTargetFromSuggestions(page, target, suggestions) {
+    const normalizedTargetHref = normalizeLinkedInProfilePath(target.linkedin_url || target.url);
+    const targetName = normalizeName(target.name);
+    const suggestionCount = Math.min(await suggestions.count(), 12);
+
+    for (let index = 0; index < suggestionCount; index += 1) {
+        const suggestion = suggestions.nth(index);
+        if (!(await suggestion.isVisible().catch(() => false))) continue;
+
+        const text = await suggestion.innerText().catch(() => "");
+        const profileLink = await profileAnchorForSuggestion(suggestion, normalizedTargetHref);
+        const href = profileLink?.href || "";
+        const normalizedHref = normalizeLinkedInProfilePath(href);
+        const candidateName = normalizeName(text.split(/\r?\n/).find(Boolean) || "");
+        const nameMatches = Boolean(targetName && candidateName === targetName);
+        const urlMatches = Boolean(normalizedTargetHref && normalizedHref === normalizedTargetHref);
+
+        console.log(`Reading target suggestion ${index + 1}/${suggestionCount}.`);
+        console.log("[TARGET_SUGGESTION]", {
+            index,
+            text,
+            candidateName,
+            headline: text.split(/\r?\n/).slice(1).join(" ").trim(),
+            company: getTargetCompany(target),
+            location: cleanText(target.location),
+            href,
+            normalizedHref,
+            targetName,
+            targetUrl: normalizedTargetHref,
+            nameMatches,
+            urlMatches,
+            isProfileResult: Boolean(normalizedHref)
+        });
+
+        if (urlMatches) {
+            console.log("Exact target suggestion found.");
+            console.log("Exact target URL match found.");
+            await clickMatchedProfileAnchor(page, { ...profileLink, text }, normalizedTargetHref);
+            return true;
+        }
+
+        if (!normalizedTargetHref && nameMatches && profileLink) {
+            await clickMatchedProfileAnchor(page, { ...profileLink, text }, "");
+            return true;
+        }
+    }
+
+    return false;
+}
+
+async function openTargetFromPeopleResults(page, target, searchBox) {
+    const normalizedTargetHref = normalizeLinkedInProfilePath(target.linkedin_url || target.url);
+    const targetName = normalizeName(target.name || target.linkedin_name);
+
+    console.log("No exact dropdown match.");
+    console.log("Checking people search results.");
+    await searchBox.press("Enter");
+    await page.waitForURL(url => /\/search\/results\//i.test(url.pathname), { timeout: 30000 });
+
+    const anchors = page.locator('main a[href*="/in/"]');
+    await anchors.first().waitFor({ state: "visible", timeout: 15000 });
+    const count = Math.min(await anchors.count(), 50);
+
+    for (let index = 0; index < count; index += 1) {
+        const anchor = anchors.nth(index);
+        const href = await anchor.getAttribute("href").catch(() => "");
+        const text = await anchor.innerText().catch(() => "");
+        const hrefMatches = Boolean(
+            normalizedTargetHref &&
+            normalizeLinkedInProfilePath(href) === normalizedTargetHref
+        );
+        const candidateName = normalizeName(text.split(/\r?\n/).find(Boolean) || "");
+        const nameMatches = Boolean(!normalizedTargetHref && targetName && candidateName === targetName);
+        if (!hrefMatches && !nameMatches) continue;
+        console.log(hrefMatches ? "Exact target URL match found." : "Exact target name match found.");
+        await clickMatchedProfileAnchor(page, { anchor, href, text }, normalizedTargetHref);
+        return true;
+    }
+
+    return false;
+}
+
 async function openTargetProfileBySearch(page, target) {
+    const targetName = String(target?.name || target?.linkedin_name || "").trim();
+    if (!targetName) {
+        throw new Error("Target name is required for LinkedIn search.");
+    }
+
     const searchBox = await getSearchBox(page);
 
-    console.log("Search box found!");
-    console.log("Searching target...");
+    console.log("Search box found.");
+    console.log("Searching target:", targetName);
+    emitProgress("searching_target", `Searching for ${targetName}...`);
 
     await moveMouseToLocator(page, searchBox);
-    await prepareSearchBox(searchBox);
-    await typeLikeHuman(page, target.name);
+    await typeTargetNameIntoSearch(page, searchBox, targetName);
     await page.waitForTimeout(1000 + Math.floor(Math.random() * 1000));
 
     const suggestions = await getSearchSuggestions(page);
     await page.waitForTimeout(1500 + Math.floor(Math.random() * 700));
-    const suggestionHandles = (await suggestions.elementHandles()).slice(0, 12);
-    const targetName = cleanText(target.name).toLowerCase();
-    const targetCompany = getTargetCompany(target).toLowerCase();
-    const expectedTargetUrl = normalizeProfileUrl(target.linkedin_url || target.url);
-    let bestFallbackSuggestion = null;
-
-    for (const [index, suggestion] of suggestionHandles.entries()) {
-        const suggestionText = await suggestion.innerText().catch(() => "");
-        const suggestionUrl = normalizeProfileUrl(
-            await suggestion.getAttribute("href").catch(() => "")
-        );
-
-        console.log(`Suggestion ${index + 1}/${suggestionHandles.length}:`, suggestionText);
-
-        const normalizedSuggestion = suggestionText.toLowerCase();
-        const matchesTargetName = normalizedSuggestion.includes(targetName);
-        const matchesTargetCompany = !targetCompany ||
-            normalizedSuggestion.includes(targetCompany);
-        const matchesTargetUrl = Boolean(
-            expectedTargetUrl &&
-            suggestionUrl &&
-            suggestionUrl === expectedTargetUrl
-        );
-
-        if (matchesTargetUrl || (matchesTargetName && matchesTargetCompany)) {
-            bestFallbackSuggestion = {
-                suggestion,
-                suggestionUrl,
-                verifiedByUrl: matchesTargetUrl
-            };
-            break;
-        }
+    const dropdownMatch = await selectTargetFromSuggestions(page, target, suggestions);
+    if (!dropdownMatch && !await openTargetFromPeopleResults(page, target, searchBox)) {
+        const hasTargetUrl = Boolean(normalizeLinkedInProfilePath(target.linkedin_url || target.url));
+        throw new Error(hasTargetUrl
+            ? "Target profile URL not found in LinkedIn search results."
+            : "Target not found in LinkedIn search suggestions.");
     }
 
-    if (bestFallbackSuggestion) {
-        console.log("Matching target found.");
-        console.log("Opening target profile...");
-
-        await moveMouseToLocator(page, bestFallbackSuggestion.suggestion);
-        await page.waitForTimeout(250 + Math.floor(Math.random() * 450));
-        await clickLikeHuman(bestFallbackSuggestion.suggestion, page);
-        await waitForProfileToLoad(
-            page,
-            bestFallbackSuggestion.verifiedByUrl ? expectedTargetUrl : ""
-        );
-        return;
-    }
-
-    throw new Error("Target not found in suggestions.");
+    console.log("[TARGET] Target profile loaded");
+    emitProgress("target_profile_opened");
 }
 
-async function runSearchPipeline(page) {
-    const target = loadTargetProfile();
+async function runSearchPipeline(page, testOverrides = {}) {
+    const target = testOverrides.target || loadTargetProfile();
 
-    await openLinkedInFeed(page);
-    await performInitialTargetSearchWarmup(page);
+    console.log("Target configuration loaded.");
+    console.log("LinkedIn URL loaded:", target.linkedin_url || target.url || "Not provided");
+    console.log("Company loaded:", getTargetCompany(target) || "Not provided");
+    console.log("School loaded:", getTargetSchool(target) || "No school available");
 
-    await openTargetProfileBySearch(page, target);
+    await (testOverrides.openLinkedInFeed || openLinkedInFeed)(page);
+    await (testOverrides.performInitialTargetSearchWarmup || performInitialTargetSearchWarmup)(page);
 
-    const currentTarget = loadTargetProfile();
+    console.log("[TARGET] Opening target profile");
+    console.log("Target opening strategy: SEARCH_BY_NAME");
+    await (testOverrides.openTargetProfileBySearch || openTargetProfileBySearch)(page, target);
 
-    console.log("Scraping target profile...");
-    const targetProfile = await scrapeTargetProfile(
-        page,
-        currentTarget
-    );
+    if (testOverrides.stopAfterTargetOpening) {
+        return page;
+    }
 
-    const enrichedTarget = mergeTargetProfile(
-        currentTarget,
-        targetProfile
-    );
+    emitProgress("extracting_target");
+    const currentTarget = await processTargetProfile(page, loadTargetProfile());
 
-    saveTargetProfile(enrichedTarget);
-
+    console.log("[TARGET] Opening Connections page");
     const connectionsUrl = await openConnections(page);
 
     await waitForConnectionsPage(page, connectionsUrl);
     console.log("Target connections opened.");
 
-    await applyConnectionFilters(page, enrichedTarget);
-    console.log("Starting mutual collection.");
+    const filteredResultState = await applyConnectionFilters(page, currentTarget);
+    if (filteredResultState === "empty") {
+        console.log("Mutual collection will stop safely because LinkedIn returned no results.");
+    } else {
+        console.log("Beginning mutual collection.");
+    }
     return page;
-}
-
-async function scrapeTargetProfile(page, target) {
-    return scrapeProfile(page, target);
 }
 
 module.exports = runSearchPipeline;
 module.exports.getTargetCompany = getTargetCompany;
-module.exports.scrapeTargetProfile = scrapeTargetProfile;
+module.exports.getTargetSchool = getTargetSchool;
+module.exports.prepareSearchBox = prepareSearchBox;
+module.exports.openTargetProfileBySearch = openTargetProfileBySearch;
+module.exports.validateLinkedInProfileUrl = validateLinkedInProfileUrl;
+module.exports.normalizeLinkedInProfilePath = normalizeLinkedInProfilePath;
+module.exports.normalizeName = normalizeName;
+module.exports.selectTargetFromSuggestions = selectTargetFromSuggestions;
+module.exports.openTargetFromPeopleResults = openTargetFromPeopleResults;
+module.exports.typeTargetNameIntoSearch = typeTargetNameIntoSearch;

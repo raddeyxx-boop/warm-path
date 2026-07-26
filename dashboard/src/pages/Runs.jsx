@@ -9,41 +9,40 @@ import { usePagination } from '../hooks/usePagination'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { getRunTargetSummary, getWorkflowRuns, subscribeWorkflowRuns } from '../services/supabaseData'
 import { fallback, formatDate, formatNumber } from '../utils/format'
+import { getWorkflowProgressView } from '../utils/workflowProgress'
 
 export function Runs() {
-  const [, setClock] = useState(Date.now())
   const pagination = usePagination(25)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [sort, setSort] = useState('newest')
+  const [, setClock] = useState(Date.now())
   const { data, error, loading, lastRefreshed, refresh } = useAsyncData(
     () => getWorkflowRuns({ page: pagination.page, pageSize: pagination.pageSize, search, status, sort }),
     [pagination.page, pagination.pageSize, search, status, sort],
   )
   usePageMeta(lastRefreshed, refresh)
 
-  const hasActiveRuns = (data?.data || []).some((run) => ['queued', 'running'].includes(run.status))
+  useEffect(() => {
+    const hasActiveRun = (data?.data || []).some((run) => ['initialized', 'queued', 'running', 'processing', 'in_progress'].includes(run.status))
+    if (!hasActiveRun) return undefined
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [data])
 
   useEffect(() => {
-    const stopRealtime = subscribeWorkflowRuns(refresh)
-    return stopRealtime
-  }, [refresh])
-
-  useEffect(() => {
-    if (!hasActiveRuns) return undefined
-    const timer = setInterval(() => {
-      setClock(Date.now())
-      refresh()
-    }, 2000)
-    return () => clearInterval(timer)
-  }, [hasActiveRuns, refresh])
+    if (error) return undefined
+    return subscribeWorkflowRuns(() => {
+      void refresh()
+    })
+  }, [error, refresh])
 
   const statuses = useMemo(() => {
     return [...new Set((data?.data || []).map((run) => run.status).filter(Boolean).map(String))].sort()
   }, [data])
 
   return (
-    <section className="page-stack">
+    <section className="page-stack workflow-runs-page">
       <div className="section-heading">
         <div>
           <p className="eyebrow">Workflow history</p>
@@ -87,8 +86,8 @@ export function Runs() {
       {error ? <ErrorState message={error} onRetry={refresh} /> : null}
       {!loading && !error && data?.data?.length ? (
         <>
-          <div className="table-wrap">
-            <table>
+          <div className="table-wrap workflow-runs-table-wrap">
+            <table className="workflow-runs-table">
               <thead>
                 <tr>
                   <th>Status</th>
@@ -100,26 +99,27 @@ export function Runs() {
                 </tr>
               </thead>
               <tbody>
-                {data.data.map((run) => (
-                  <tr key={run.id}>
+                {data.data.map((run) => {
+                  const progressView = getWorkflowProgressView(run)
+                  return <tr key={run.id}>
                     <td><div className="card-actions"><StatusBadge value={run.status} />{run.cache_hit ? <Badge tone="info">Cached</Badge> : null}</div></td>
                     <td>{fallback(getRunTargetSummary(run))}</td>
-                    <td>{formatNumber(run.total_candidates)}</td>
+                    <td>{formatNumber(run.total_candidates ?? 0)}</td>
                     <td>
                       <div className="workflow-progress">
-                        <div className="workflow-progress-label"><strong>{run.current_message || run.current_step || run.status}</strong><span>{run.progress_percent || 0}%</span></div>
-                        <progress max="100" value={run.progress_percent || 0}>{run.progress_percent || 0}%</progress>
+                        <div className="workflow-progress-label"><strong>{progressView.label}</strong><span>{progressView.percentage}%</span></div>
+                        <progress max="100" value={progressView.percentage}>{progressView.percentage}%</progress>
                         <WorkflowStats run={run} />
                       </div>
                     </td>
                     <td>
                       <small>Started {formatDate(run.started_at || run.created_at)}</small><br />
-                      <small>Elapsed {elapsedLabel(run.started_at || run.created_at, run.completed_at)}</small><br />
-                      {run.estimated_remaining_seconds != null ? <small>About {durationLabel(run.estimated_remaining_seconds)} remaining</small> : null}
+                      <small>{timingLabel(run)}</small><br />
+                      {remainingLabel(run) ? <small>{remainingLabel(run)}</small> : null}
                     </td>
-                    <td><Link className="button button-secondary" to={`/runs/${run.id}`}>View details</Link></td>
+                    <td><Link className="button button-secondary" to={`/runs/${run.id}`}>{actionLabel(progressView.state)}</Link></td>
                   </tr>
-                ))}
+                })}
               </tbody>
             </table>
           </div>
@@ -149,6 +149,28 @@ function elapsedLabel(start, end) {
   const started = Date.parse(start || '')
   if (!Number.isFinite(started)) return 'Not available'
   return durationLabel(((end ? Date.parse(end) : Date.now()) - started) / 1000)
+}
+
+function actionLabel(state) {
+  if (state === 'completed') return 'View results'
+  if (state === 'failed') return 'View details'
+  return 'View details'
+}
+
+function timingLabel(run) {
+  const start = run.started_at || run.created_at
+  if (run.status === 'completed') return `Completed in ${elapsedLabel(start, run.completed_at)}`
+  if (run.status === 'failed') return `Stopped after ${elapsedLabel(start, run.failed_at || run.updated_at)}`
+  if (['cancelled', 'canceled', 'stopped'].includes(run.status)) return `Cancelled after ${elapsedLabel(start, run.finished_at || run.updated_at)}`
+  if (['timed_out', 'timeout'].includes(run.status)) return `Timed out after ${elapsedLabel(start, run.failed_at || run.updated_at)}`
+  return `Elapsed ${elapsedLabel(start)}`
+}
+
+function remainingLabel(run) {
+  if (!['running', 'processing', 'in_progress'].includes(run.status)) return ''
+  const remaining = Number(run.estimated_remaining_seconds)
+  if (!Number.isFinite(remaining) || remaining < 0) return ''
+  return `Estimated ${durationLabel(remaining)} remaining`
 }
 
 function WorkflowStats({ run }) {

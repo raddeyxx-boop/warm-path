@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { requireSupabaseSession } from './authSession'
+import { normalizeLinkedInProfileUrl } from '../../../types/target-search-request.ts'
 
 export const ACTIVE_SEARCH_MESSAGE = 'You already have a search in progress. Wait for it to finish before starting another.'
 
@@ -34,10 +35,17 @@ export function normalizeCommaList(value) {
 }
 
 export function normalizeTargetSearchForm(formData) {
+  let linkedinUrl
+  try {
+    linkedinUrl = normalizeLinkedInProfileUrl(formData?.linkedinName) || ''
+  } catch (error) {
+    throw new TargetSearchError('validation', 'Enter a valid LinkedIn profile URL.', error)
+  }
+
   const normalized = {
     targetName: String(formData?.targetName || '').trim(),
     currentCompany: String(formData?.currentCompany || '').trim(),
-    linkedinName: String(formData?.linkedinName || '').trim(),
+    linkedinName: linkedinUrl,
     location: String(formData?.location || '').trim(),
   }
 
@@ -101,6 +109,9 @@ export async function initializeTargetSearch(formData) {
     const session = await requireSupabaseSession()
     const normalizedForm = normalizeTargetSearchForm(formData)
     const normalizedSearchKey = await createNormalizedSearchKey(normalizedForm)
+
+    const { error: recoveryError } = await supabase.rpc('recover_abandoned_target_searches')
+    if (recoveryError) throw recoveryError
 
     const { data: activeSearch, error: activeError } = await supabase
       .from('search_requests')

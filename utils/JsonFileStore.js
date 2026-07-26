@@ -38,7 +38,12 @@ function writeJsonAtomicSync(filePath, value) {
             if (fs.existsSync(tempPath)) {
                 fs.unlinkSync(tempPath);
             }
-        } catch (cleanupErr) {}
+        } catch (cleanupErr) {
+            console.warn("[JsonFileStore.writeJsonAtomicSync] Temporary-file cleanup failed.", {
+                tempPath,
+                reason: cleanupErr.message
+            });
+        }
 
         throw err;
     }

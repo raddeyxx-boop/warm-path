@@ -2,13 +2,17 @@ const fs = require("fs");
 const path = require("path");
 
 const {
-    serializeFinalProfiles
+    serializeFinalProfiles,
+    validateRelationshipEvidence
 } = require("../utils/FinalProfileSerializer");
+const { sendExtractionToN8n } = require("../services/n8n-webhook-client");
+const { createServiceSupabaseClient } = require("../services/supabase-server");
 
 const DATA_DIR = path.resolve(process.env.WARM_PATH_RUN_DIR || path.join(__dirname, "..", "data"));
 const filePath = path.join(DATA_DIR, "mutual-details-classified.json");
 
 const targetPath = path.join(DATA_DIR, "target.json");
+const connectionsPath = path.join(DATA_DIR, "mutuals.json");
 
 function loadEnvFile(envPath) {
     if (!fs.existsSync(envPath)) {
@@ -62,12 +66,12 @@ function loadLocalEnv() {
 loadLocalEnv();
 
 function getWebhookUrl() {
-    return process.env.N8N_WEBHOOK_URL ||
-        "http://localhost:5678/webhook/warm-path";
+    return process.env.N8N_EXTRACTION_WEBHOOK_URL || "";
 }
 
 function getWebhookTimeoutMs() {
-    return Number(process.env.N8N_WEBHOOK_TIMEOUT_MS || 30000);
+    const configured = Number(process.env.N8N_WEBHOOK_TIMEOUT_MS);
+    return Number.isFinite(configured) && configured > 0 ? configured : 30000;
 }
 
 function parseCliArgs(argv) {
@@ -103,8 +107,8 @@ function parseCliArgs(argv) {
 
 function createMissingAuthError() {
     return new Error(
-        "Missing n8n ownership auth. Run through POST /run from the logged-in app, " +
-        "or set OWNER_USER_ID and SUPABASE_ACCESS_TOKEN before running this script directly."
+        "Missing n8n ownership context. Set OWNER_USER_ID, WORKFLOW_RUN_ID, and " +
+        "SEARCH_REQUEST_ID before retrying a completed extraction."
     );
 }
 
@@ -129,7 +133,6 @@ async function promptForCliValue(label) {
 async function resolveOwnerContext() {
     const cliArgs = parseCliArgs(process.argv.slice(2));
     let ownerUserId = cliArgs.ownerUserId || process.env.OWNER_USER_ID || "";
-    let accessToken = cliArgs.accessToken || process.env.SUPABASE_ACCESS_TOKEN || "";
 
     if (require.main === module) {
         if (!ownerUserId) {
@@ -138,21 +141,13 @@ async function resolveOwnerContext() {
             );
         }
 
-        if (!accessToken) {
-            accessToken = await promptForCliValue(
-                "Supabase access token for Authorization header: "
-            );
-        }
     }
 
-    if (!ownerUserId || !accessToken) {
+    if (!ownerUserId) {
         throw createMissingAuthError();
     }
 
-    return {
-        ownerUserId,
-        accessToken
-    };
+    return { ownerUserId };
 }
 
 function readRequiredJson(filePathToRead, label) {
@@ -175,91 +170,178 @@ function parseResponseBody(text, contentType) {
     }
 }
 
-async function sendToN8N() {
-    const { ownerUserId, accessToken } = await resolveOwnerContext();
-    const startedAt = Date.now();
+function validateN8NPayloadContext({ ownerUserId, workflowRunId, searchRequestId, target }) {
+    if (!ownerUserId) throw new Error("OWNER_USER_ID is missing.");
+    if (!workflowRunId) throw new Error("WORKFLOW_RUN_ID is missing.");
+    if (!searchRequestId) throw new Error("SEARCH_REQUEST_ID is missing.");
+    if (!target || typeof target !== "object" || Array.isArray(target)) {
+        throw new Error("Target input is missing from the n8n payload.");
+    }
+    if (!String(target.name || "").trim()) {
+        throw new Error("Target name is missing from the n8n payload.");
+    }
+}
 
-    const profiles = serializeFinalProfiles(readRequiredJson(
-        filePath,
-        "mutual-details-classified.json"
-    ));
-    const target = readRequiredJson(targetPath, "target.json");
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), getWebhookTimeoutMs());
+function buildFinalExtractionPayload({ ownerUserId, workflowRunId, searchRequestId, target, profiles, connections, searchHash }) {
+    validateN8NPayloadContext({ ownerUserId, workflowRunId, searchRequestId, target });
+    if (!Array.isArray(profiles)) throw new Error("Final candidates must be an array.");
+    if (!Array.isArray(connections)) throw new Error("Final connections must be an array.");
+    validateRelationshipEvidence(profiles);
+    const serializedProfiles = serializeFinalProfiles(profiles);
+    validateRelationshipEvidence(serializedProfiles);
 
-    console.log("n8n delivery", {
-        event: "started",
-        workflow_run_id: process.env.WORKFLOW_RUN_ID || null,
-        search_request_id: process.env.SEARCH_REQUEST_ID || null,
+    const completedAt = new Date().toISOString();
+    const startedAt = target.createdAt || completedAt;
+    const startedTime = Date.parse(startedAt);
+    const completedTime = Date.parse(completedAt);
+    const idempotencyKey = `${workflowRunId}:${searchRequestId}:extraction_completed`;
+    const finalReport = {
+        target,
+        mutual_connections: serializedProfiles,
         owner_user_id: ownerUserId,
-        profile_count: profiles.length
-    });
+        workflow_run_id: workflowRunId,
+        search_request_id: searchRequestId,
+        search_hash: searchHash || null,
+        progress: { step: "ai_analysis", profiles_processed: serializedProfiles.length }
+    };
 
-    try {
-        const response = await fetch(getWebhookUrl(), {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${accessToken}`
+    return {
+        event: "warm_path.extraction_completed",
+        event_version: "1.0",
+        sent_at: completedAt,
+        workflow_run_id: workflowRunId,
+        search_request_id: searchRequestId,
+        owner_user_id: ownerUserId,
+        target: {
+            name: target.name,
+            linkedin_url: target.linkedin_url || target.url || null,
+            canonical_linkedin_url: target.url || target.linkedin_url || null,
+            current_company: target.current_company || target.company || null,
+            location: target.location || null,
+            profile: target
+        },
+        extraction: {
+            target_profile: target,
+            connections,
+            candidates: serializedProfiles,
+            relationship_evidence: serializedProfiles.map(profile => profile.relationship_evidence),
+            summary: {
+                status: "completed",
+                connection_count: connections.length,
+                candidate_count: serializedProfiles.length
             },
-            body: JSON.stringify({
-                target,
-                mutual_connections: profiles,
-                owner_user_id: ownerUserId,
-                workflow_run_id: process.env.WORKFLOW_RUN_ID || null,
-                search_request_id: process.env.SEARCH_REQUEST_ID || null,
-                search_hash: process.env.SEARCH_HASH || null,
-                progress: {
-                    step: "ai_analysis",
-                    profiles_processed: profiles.length
-                }
-            }),
-            signal: controller.signal
+            final_report: finalReport
+        },
+        metadata: {
+            source: "warm-path-playwright",
+            environment: process.env.NODE_ENV || "development",
+            execution_started_at: startedAt,
+            execution_completed_at: completedAt,
+            execution_duration_ms: Number.isFinite(startedTime) && Number.isFinite(completedTime)
+                ? Math.max(0, completedTime - startedTime)
+                : 0,
+            final_extraction_status: "completed",
+            idempotency_key: idempotencyKey
+        },
+        ...finalReport
+    };
+}
+
+async function updateDispatchStatus(client, ownerUserId, workflowRunId, values) {
+    const { error } = await client.from("workflow_runs").update(values)
+        .eq("id", workflowRunId).eq("owner_user_id", ownerUserId);
+    if (!error) return true;
+    if (error.code === "PGRST204") {
+        console.warn("n8n dispatch columns are unavailable; apply the n8n dispatch status migration.", {
+            workflow_run_id: workflowRunId
         });
-        const contentType = response.headers.get("content-type") || "";
-        const text = await response.text();
-        const body = parseResponseBody(text, contentType);
+        return false;
+    }
+    throw error;
+}
 
-        console.log("n8n delivery", {
-            event: "response_received",
-            workflow_run_id: process.env.WORKFLOW_RUN_ID || null,
-            search_request_id: process.env.SEARCH_REQUEST_ID || null,
-            owner_user_id: ownerUserId,
-            status: response.status,
-            elapsed_ms: Date.now() - startedAt
+async function sendToN8N() {
+    const { ownerUserId } = await resolveOwnerContext();
+    const webhookUrl = getWebhookUrl();
+    const rawProfiles = readRequiredJson(filePath, "mutual-details-classified.json");
+    if (!Array.isArray(rawProfiles)) throw new Error("mutual-details-classified.json must contain an array.");
+    const profiles = serializeFinalProfiles(rawProfiles);
+    const target = readRequiredJson(targetPath, "target.json");
+    const connections = readRequiredJson(connectionsPath, "mutuals.json");
+    const workflowRunId = process.env.WORKFLOW_RUN_ID || "";
+    const searchRequestId = process.env.SEARCH_REQUEST_ID || "";
+    const payload = buildFinalExtractionPayload({
+        ownerUserId, workflowRunId, searchRequestId, target, profiles, connections,
+        searchHash: process.env.SEARCH_HASH || null
+    });
+    const serializedPayload = JSON.stringify(payload);
+    const payloadBytes = Buffer.byteLength(serializedPayload, "utf8");
+    console.log("[N8N_PAYLOAD_READY]", {
+        workflow_run_id: workflowRunId,
+        search_request_id: searchRequestId,
+        target_name: target.name,
+        connection_count: connections.length,
+        candidate_count: profiles.length,
+        payload_bytes: payloadBytes
+    });
+    const client = createServiceSupabaseClient();
+    let attempts = 0;
+    await updateDispatchStatus(client, ownerUserId, workflowRunId, {
+        n8n_dispatch_status: "dispatching", n8n_dispatch_attempts: 0,
+        n8n_last_error: null
+    }).catch(statusError => console.error("Failed to persist n8n dispatch start; continuing with saved extraction", {
+        workflow_run_id: workflowRunId, message: statusError.message
+    }));
+    try {
+        const result = await sendExtractionToN8n({
+            webhookUrl,
+            webhookSecret: process.env.N8N_WEBHOOK_SECRET || "",
+            payload,
+            timeoutMs: getWebhookTimeoutMs(),
+            maxRetries: Number(process.env.N8N_WEBHOOK_MAX_RETRIES) || 3
         });
-
-        if (!response.ok) {
-            const message = typeof body === "string"
-                ? body
-                : body.message || body.error || "";
-
-            throw new Error(
-                message ||
-                "n8n webhook returned HTTP " +
-                    response.status +
-                    ": " +
-                    text.slice(0, 500)
-            );
-        }
-
-        return {
-            status: response.status,
-            body
-        };
-    } finally {
-        clearTimeout(timeout);
+        attempts = result.attempts;
+        await updateDispatchStatus(client, ownerUserId, workflowRunId, {
+            n8n_dispatch_status: "succeeded",
+            n8n_dispatch_attempts: attempts,
+            n8n_dispatched_at: new Date().toISOString(),
+            n8n_response_status: result.status,
+            n8n_execution_id: result.n8n_execution_id,
+            n8n_last_error: null
+        }).catch(statusError => console.error("n8n dispatch succeeded but status persistence failed", {
+            workflow_run_id: workflowRunId, n8n_execution_id: result.n8n_execution_id,
+            message: statusError.message
+        }));
+        return result;
+    } catch (error) {
+        attempts = error.attempt || attempts;
+        await updateDispatchStatus(client, ownerUserId, workflowRunId, {
+            n8n_dispatch_status: "failed",
+            n8n_dispatch_attempts: attempts,
+            n8n_response_status: error.status || null,
+            n8n_last_error: String(error.message || "n8n dispatch failed").slice(0, 500)
+        }).catch(statusError => console.error("Failed to persist n8n dispatch failure", {
+            workflow_run_id: workflowRunId, message: statusError.message
+        }));
+        throw error;
     }
 }
 
 if (require.main === module) {
     sendToN8N().catch(error => {
-        console.error("Failed to send data to n8n");
-        console.error(error);
+        console.error("send-to-n8n failed", {
+            name: error?.name, message: error?.message, code: error?.code,
+            status: error?.status, statusText: error?.statusText,
+            cause: error?.cause, responseBody: error?.responseBody, stack: error?.stack
+        });
         process.exitCode = 1;
     });
 }
 
 module.exports = {
-    sendToN8N
+    buildFinalExtractionPayload,
+    sendToN8N,
+    updateDispatchStatus,
+    validateN8NPayloadContext,
+    validateRelationshipEvidence
 };

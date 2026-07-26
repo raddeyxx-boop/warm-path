@@ -299,13 +299,21 @@ async function postCallback(payload) {
         return;
     }
 
-    const response = await fetch(callbackUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    let response;
+    try {
+        response = await fetch(callbackUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+        });
+    } catch (error) {
+        throw new Error(`n8n callback delivery failed: ${error.message}`, { cause: error });
+    } finally {
+        clearTimeout(timeout);
+    }
 
     if (!response.ok) {
         throw new Error(`n8n callback failed: ${response.status} ${response.statusText}`);

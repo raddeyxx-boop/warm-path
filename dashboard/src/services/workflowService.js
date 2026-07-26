@@ -2,6 +2,10 @@ import { requireSupabaseSession } from './authSession'
 
 const DEFAULT_WORKFLOW_RUN_URL = 'http://localhost:3000/run'
 
+function getApiBaseUrl() {
+  return (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '')
+}
+
 function getWorkflowRunUrl() {
   return import.meta.env.VITE_WORKFLOW_RUN_API_URL || DEFAULT_WORKFLOW_RUN_URL
 }
@@ -28,9 +32,6 @@ export async function startWarmPathWorkflow(existingPayload = {}) {
     owner_user_id: ownerUserId,
   }
 
-  console.debug('[workflow] authenticated owner_user_id', ownerUserId)
-  console.debug('[workflow] Authorization header attached:', Boolean(session.access_token))
-
   const response = await fetch(workflowRunUrl, {
     method: 'POST',
     headers: {
@@ -54,5 +55,31 @@ export async function startWarmPathWorkflow(existingPayload = {}) {
     throw new Error(message)
   }
 
+  return result
+}
+
+export async function stopWorkflow(workflowRunId) {
+  const session = await requireSupabaseSession()
+  const response = await fetch(`${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowRunId)}/stop`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  const result = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(result?.message || `Unable to stop workflow (${response.status}).`)
+  }
+  return result
+}
+
+export async function deleteWorkflow(workflowRunId) {
+  const session = await requireSupabaseSession()
+  const response = await fetch(`${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowRunId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  const result = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(result?.message || `Unable to delete workflow (${response.status}).`)
+  }
   return result
 }

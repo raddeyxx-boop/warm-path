@@ -1,0 +1,35 @@
+{
+  "error": "Next was clicked but LinkedIn results page did not change.",
+  "url": "https://www.linkedin.com/in/bhavyabedi/",
+  "previousState": {
+    "url": "https://www.linkedin.com/in/bhavyabedi/",
+    "pageNumber": "unknown",
+    "firstCandidateUrl": "https://www.linkedin.com/in/bhavyabedi/",
+    "firstThreeCandidateUrls": [
+      "https://www.linkedin.com/in/bhavyabedi/",
+      "https://www.linkedin.com/in/aashijit-mukhopadhyay/",
+      "https://www.linkedin.com/in/pranav-chandra-b8843818b/"
+    ],
+    "fingerprint": "unknown|https://www.linkedin.com/in/bhavyabedi/|https://www.linkedin.com/in/aashijit-mukhopadhyay/|https://www.linkedin.com/in/pranav-chandra-b8843818b/|https://www.linkedin.com/in/bhavyabedi/"
+  },
+  "selectedControl": {
+    "found": true,
+    "visible": true,
+    "enabled": true,
+    "selectorStrategy": "visible semantic Next inside main",
+    "index": 215,
+    "tagName": "BUTTON",
+    "text": "",
+    "ariaLabel": "Next",
+    "role": "",
+    "disabled": false,
+    "ariaDisabled": null,
+    "boundingBox": {
+      "x": 940.4000244140625,
+      "y": -1611.550048828125,
+      "width": 32,
+      "height": 48
+    },
+    "insidePagination": false
+  }
+}

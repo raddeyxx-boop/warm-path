@@ -1,0 +1,188 @@
+[
+  {
+    "name": "Jnanesha V G",
+    "linkedin_url": "https://www.linkedin.com/in/jnanesha-v-g/",
+    "reason": "Unable to open mutual \"Jnanesha V G\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:10:56.317Z"
+  },
+  {
+    "name": "Varun Mahesh",
+    "linkedin_url": "https://www.linkedin.com/in/varun-mahesh-a0a8271a0/",
+    "reason": "Unable to open mutual \"Varun Mahesh\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:11:34.079Z"
+  },
+  {
+    "name": "Vinothkumar Subramani",
+    "linkedin_url": "https://www.linkedin.com/in/vinothkumar-subramani-6b718975/",
+    "reason": "Unable to open mutual \"Vinothkumar Subramani\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:12:15.010Z"
+  },
+  {
+    "name": "Alwandi Kavana",
+    "linkedin_url": "https://www.linkedin.com/in/alwandi-kavana/",
+    "reason": "Unable to open mutual \"Alwandi Kavana\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:12:55.159Z"
+  },
+  {
+    "name": "Dilip Rayguru",
+    "linkedin_url": "https://www.linkedin.com/in/diliprayguru/",
+    "reason": "Unable to open mutual \"Dilip Rayguru\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:13:37.655Z"
+  },
+  {
+    "name": "J Nagavardhan Reddy",
+    "linkedin_url": "https://www.linkedin.com/in/jnvreddy/",
+    "reason": "Unable to open mutual \"J Nagavardhan Reddy\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:14:16.674Z"
+  },
+  {
+    "name": "Boddupally Praneeth",
+    "linkedin_url": "https://www.linkedin.com/in/boddupally-praneeth/",
+    "reason": "Unable to open mutual \"Boddupally Praneeth\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:14:58.635Z"
+  },
+  {
+    "name": "Prajwal Prabhugowda Gowdra",
+    "linkedin_url": "https://www.linkedin.com/in/prajwal-prabhugowda-gowdra-21bb31205/",
+    "reason": "Unable to open mutual \"Prajwal Prabhugowda Gowdra\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:15:48.022Z"
+  },
+  {
+    "name": "Dhaya Duraisamy",
+    "linkedin_url": "https://www.linkedin.com/in/dhaya-duraisamy-52644524/",
+    "reason": "Unable to open mutual \"Dhaya Duraisamy\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:16:30.089Z"
+  },
+  {
+    "name": "Sujoy Ghosh",
+    "linkedin_url": "https://www.linkedin.com/in/sujoy-ghosh2000/",
+    "reason": "Unable to open mutual \"Sujoy Ghosh\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:17:07.533Z"
+  },
+  {
+    "name": "Moumita Sen",
+    "linkedin_url": "https://www.linkedin.com/in/moumita-sen-018b28a3/",
+    "reason": "Unable to open mutual \"Moumita Sen\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:17:49.244Z"
+  },
+  {
+    "name": "Aashijit Mukhopadhyay",
+    "linkedin_url": "https://www.linkedin.com/in/aashijit-mukhopadhyay/",
+    "reason": "Unable to open mutual \"Aashijit Mukhopadhyay\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:18:33.126Z"
+  },
+  {
+    "name": "Tamanna Sharma",
+    "linkedin_url": "https://www.linkedin.com/in/tamanna-sharma-17b890243/",
+    "reason": "Unable to open mutual \"Tamanna Sharma\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:19:11.029Z"
+  },
+  {
+    "name": "Rutik Kulkarni",
+    "linkedin_url": "https://www.linkedin.com/in/rutikkulkarni/",
+    "reason": "Unable to open mutual \"Rutik Kulkarni\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:19:51.329Z"
+  },
+  {
+    "name": "Pratika NG",
+    "linkedin_url": "https://www.linkedin.com/in/pratika-ng/",
+    "reason": "Unable to open mutual \"Pratika NG\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:20:27.612Z"
+  },
+  {
+    "name": "Vishnu A",
+    "linkedin_url": "https://www.linkedin.com/in/vishnu-a-20b9ab1ba/",
+    "reason": "Unable to open mutual \"Vishnu A\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:21:04.153Z"
+  },
+  {
+    "name": "Ramakrishna Kushna",
+    "linkedin_url": "https://www.linkedin.com/in/krk-tech/",
+    "reason": "Unable to open mutual \"Ramakrishna Kushna\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:21:42.888Z"
+  },
+  {
+    "name": "Parvez Ali",
+    "linkedin_url": "https://www.linkedin.com/in/aliparvez20/",
+    "reason": "Unable to open mutual \"Parvez Ali\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:22:23.088Z"
+  },
+  {
+    "name": "Renu Gangwar",
+    "linkedin_url": "https://www.linkedin.com/in/renu-gangwar-7570a1128/",
+    "reason": "Unable to open mutual \"Renu Gangwar\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:23:04.550Z"
+  },
+  {
+    "name": "Bhavya Bedi",
+    "linkedin_url": "https://www.linkedin.com/in/bhavyabedi/",
+    "reason": "Unable to open mutual \"Bhavya Bedi\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:23:44.167Z"
+  },
+  {
+    "name": "Debraj Saha",
+    "linkedin_url": "https://www.linkedin.com/in/debraj-saha/",
+    "reason": "Unable to open mutual \"Debraj Saha\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:24:22.304Z"
+  },
+  {
+    "name": "Thaslima Nazrin",
+    "linkedin_url": "https://www.linkedin.com/in/thaslima-nazrin-52b0611b8/",
+    "reason": "Unable to open mutual \"Thaslima Nazrin\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:25:00.978Z"
+  },
+  {
+    "name": "Sphoorti Yamoji",
+    "linkedin_url": "https://www.linkedin.com/in/sphoorti-yamoji-49b010227/",
+    "reason": "Unable to open mutual \"Sphoorti Yamoji\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:25:38.005Z"
+  },
+  {
+    "name": "Akash Agrawal",
+    "linkedin_url": "https://www.linkedin.com/in/akash-agrawal-8b6504104/",
+    "reason": "Unable to open mutual \"Akash Agrawal\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:26:18.413Z"
+  },
+  {
+    "name": "Sindhu M",
+    "linkedin_url": "https://www.linkedin.com/in/sindhum29/",
+    "reason": "Unable to open mutual \"Sindhu M\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:26:54.896Z"
+  },
+  {
+    "name": "MOHAMMED UMAIR ANSARI",
+    "linkedin_url": "https://www.linkedin.com/in/umairansari896/",
+    "reason": "Unable to open mutual \"MOHAMMED UMAIR ANSARI\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:27:38.043Z"
+  },
+  {
+    "name": "Bobby Biswas",
+    "linkedin_url": "https://www.linkedin.com/in/bobby-biswas-b8657913/",
+    "reason": "Unable to open mutual \"Bobby Biswas\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:28:16.499Z"
+  },
+  {
+    "name": "Tom Bergström",
+    "linkedin_url": "https://www.linkedin.com/in/bergstrom-tom/",
+    "reason": "Unable to open mutual \"Tom Bergström\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:28:58.957Z"
+  },
+  {
+    "name": "Pavel Siddique",
+    "linkedin_url": "https://www.linkedin.com/in/pavelsiddique/",
+    "reason": "Unable to open mutual \"Pavel Siddique\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:29:39.775Z"
+  },
+  {
+    "name": "Inderjit Sehrawat",
+    "linkedin_url": "https://www.linkedin.com/in/inderjit-sehrawat-5a9667/",
+    "reason": "Unable to open mutual \"Inderjit Sehrawat\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:30:20.267Z"
+  },
+  {
+    "name": "Leon Mendel",
+    "linkedin_url": "https://www.linkedin.com/in/leon-mendel-9a0a0520b/",
+    "reason": "Unable to open mutual \"Leon Mendel\" through verified LinkedIn search: locator.waitFor: Timeout 9000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('[role=\"listbox\"] a[href*=\"/in/\"]').first() to be visible\u001b[22m\n",
+    "failed_at": "2026-07-24T20:30:59.163Z"
+  }
+]

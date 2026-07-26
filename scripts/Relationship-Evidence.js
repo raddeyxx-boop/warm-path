@@ -325,13 +325,7 @@ function firstLocationPart(location) {
 }
 
 function displaySchoolName(value) {
-    const school = cleanText(value);
-
-    if (/ramaiah/i.test(school)) {
-        return "Ramaiah College";
-    }
-
-    return school;
+    return cleanText(value);
 }
 
 function buildRelationshipSummary(profile, relationshipEvidence) {
@@ -486,59 +480,39 @@ function buildRelationshipEvidence(profile, target) {
         target_companies: targetCompanyEntries
     });
 
-    if (candidateCompany && targetCompany && candidateCompany === targetCompany) {
+    const authoritativeSameCompany = Boolean(
+        candidateCompany &&
+        targetCompany &&
+        candidateCompany === targetCompany
+    );
+
+    if (authoritativeSameCompany) {
         relationshipEvidence.same_company = true;
-        relationshipEvidence.company_name = candidateCompanyRaw || targetCompanyRaw;
         relationshipEvidence.current_employee = true;
+        relationshipEvidence.company_name = candidateCompanyRaw || targetCompanyRaw;
         addExplanation(
             relationshipEvidence,
             `Worked together at ${relationshipEvidence.company_name}`
         );
-    }
 
-    const currentExperience = (profile.experience || []).find(exp => {
-        const expCompany = normalizeCompany(exp.company || "");
-        const duration = getDuration(exp?.duration);
+        const matchingCurrentExperience = (profile.experience || []).find(exp => {
+            const expCompany = normalizeCompany(exp.company || "");
+            const duration = getDuration(exp?.duration);
 
-        return duration.currently_working === true &&
-            (
-                (targetCompany && expCompany === targetCompany) ||
-                (candidateCompany && expCompany === candidateCompany) ||
-                targetCompanies.includes(expCompany)
-            );
-    });
+            return duration.currently_working === true &&
+                expCompany === candidateCompany;
+        });
 
-    if (currentExperience) {
-        relationshipEvidence.current_employee = true;
-        relationshipEvidence.years_at_company = calculateYearsAtCompany(currentExperience);
-
-        if (!relationshipEvidence.company_name) {
-            relationshipEvidence.company_name =
-                currentExperience.company || candidateCompanyRaw || targetCompanyRaw;
+        if (matchingCurrentExperience) {
+            relationshipEvidence.years_at_company =
+                calculateYearsAtCompany(matchingCurrentExperience);
         }
-    }
-
-    if (!relationshipEvidence.same_company) {
-        const matchingCurrentCompany = candidateCompanyEntries.find(entry =>
-            (entry.source === "current_company" || entry.current === true) &&
-            targetCompanies.includes(entry.normalized)
-        );
-
-        if (matchingCurrentCompany) {
-            relationshipEvidence.same_company = true;
-            relationshipEvidence.current_employee = true;
-            relationshipEvidence.company_name = matchingCurrentCompany.raw;
-            addExplanation(
-                relationshipEvidence,
-                `Worked together at ${relationshipEvidence.company_name}`
-            );
-        } else {
-            debugRelationshipComparison("same_company failed", {
-                reason: "No candidate current company matched target company signals after normalization.",
-                candidateCompanies,
-                targetCompanies
-            });
-        }
+    } else {
+        debugRelationshipComparison("same_company failed", {
+            reason: "Candidate authoritative current company did not match target current company after normalization.",
+            candidateCompanies,
+            targetCompanies
+        });
     }
 
     const candidateDepartments = uniqueValues(getDepartments(profile));
@@ -811,6 +785,8 @@ function buildRelationshipEvidence(profile, target) {
     return {
 
         ...profile,
+
+        technologies: candidateTechnologies,
 
         relationship_evidence: relationshipEvidence,
 

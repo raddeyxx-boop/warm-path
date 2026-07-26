@@ -24,8 +24,8 @@ export function TopCandidates() {
       </div>
       {data?.length ? (
         <div className="grid cards-grid">
-          {data.map((candidate, index) => (
-            <CandidateCard candidate={candidate} prominent enableReasonFlip key={candidate.id || `${candidate.rank}-${index}`} />
+          {data.map((candidate) => (
+            <CandidateCard candidate={candidate} prominent enableReasonFlip key={`${candidate.workflow_run_id}:${candidate.candidate_id || candidate.id}`} />
           ))}
         </div>
       ) : (

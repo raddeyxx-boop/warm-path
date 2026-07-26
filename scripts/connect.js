@@ -1,4 +1,6 @@
 const startBrowser = require('../services/browser');
+const { resilientClick } = require('../services/playwright-actions');
+const { safeGoto } = require('../services/scrape-utils');
 
 async function connectToProfile(profileUrl) {
 
@@ -9,15 +11,13 @@ async function connectToProfile(profileUrl) {
         console.log('Opening profile...');
         console.log(profileUrl);
 
-        await page.goto(profileUrl, {
-            waitUntil: 'domcontentloaded'
-        });
+        await safeGoto(page, profileUrl, { retries: 3 });
 
         await page.waitForTimeout(5000);
 
-        const connectLink = page
-            .locator('a[href*="/preload/custom-invite/"]')
-            .filter({ hasText: 'Connect' })
+        const connectLink = page.getByRole('button', { name: /^connect$/i })
+            .or(page.getByRole('link', { name: /^connect$/i }))
+            .or(page.locator('a[href*="/preload/custom-invite/"]').filter({ hasText: /^Connect$/i }))
             .first();
 
         const connectCount = await connectLink.count();
@@ -28,24 +28,12 @@ async function connectToProfile(profileUrl) {
 
         console.log('Connect button found');
 
-        await connectLink.scrollIntoViewIfNeeded();
-
-        await page.waitForTimeout(1000);
-
-        try {
-
-            await connectLink.click({
-                force: true
-            });
-
-        } catch {
-
-            console.log(
-                'Normal click failed, using DOM click...'
-            );
-
-            await connectLink.evaluate(el => el.click());
-        }
+        await resilientClick(connectLink, {
+            context: 'connect.connectToProfile',
+            page,
+            timeout: 7000,
+            pauseBeforeClick: () => page.waitForTimeout(1000)
+        });
 
         console.log('Connect clicked');
 
@@ -77,7 +65,9 @@ async function connectToProfile(profileUrl) {
 
     } finally {
 
-        await browser.close();
+        await browser.close().catch(closeError => {
+            console.error('[connect.js:connectToProfile] Browser cleanup failed:', closeError.message);
+        });
     }
 }
 

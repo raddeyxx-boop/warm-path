@@ -1,10 +1,9 @@
-import { BarChart3, BriefcaseBusiness, Database, LogOut, Menu, RefreshCcw, Route, Search, ShieldCheck, Users, X } from 'lucide-react'
+import { BarChart3, BriefcaseBusiness, Database, LogOut, Menu, Moon, RefreshCcw, Route, Search, ShieldCheck, Sun, Users, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { PolygonMotif } from '../components/PolygonMotif'
 import { getConnectionState } from '../lib/supabase'
-import { formatDate } from '../utils/format'
 import { ConfigState } from '../components/StateBlocks'
 
 const navItems = [
@@ -31,14 +30,8 @@ const subtitles = {
   '/find-target': 'Enter a target and optional people filters to start a new warm-path search.',
 }
 
-const SIDEBAR_HIDE_DELAY = 150
-
-function supportsDesktopAutoHide() {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(min-width: 1041px) and (hover: hover) and (pointer: fine)').matches
-  )
-}
+const DASHBOARD_THEME_KEY = 'warm-path-dashboard-theme'
+const SIDEBAR_CLOSE_DELAY = 220
 
 function Sidebar({ mobileOpen, desktopVisible, onClose, onPointerEnter, onPointerLeave }) {
   return (
@@ -50,12 +43,12 @@ function Sidebar({ mobileOpen, desktopVisible, onClose, onPointerEnter, onPointe
       >
         <PolygonMotif
           size={152}
-        sides={5}
-        cornerRounding={0.08}
-        surface="deep-dark"
-        className="polygon-float polygon-float-subtle"
-        style={{ right: -18, bottom: -8, transform: 'rotate(62deg)' }}
-      />
+          sides={5}
+          cornerRounding={0.08}
+          surface="deep-dark"
+          className="polygon-float polygon-float-subtle"
+          style={{ right: -18, bottom: -8, transform: 'rotate(62deg)' }}
+        />
         <div className="brand">
           <div className="brand-mark">WP</div>
           <div>
@@ -86,49 +79,65 @@ function Sidebar({ mobileOpen, desktopVisible, onClose, onPointerEnter, onPointe
 export function AppLayout() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [desktopSidebarVisible, setDesktopSidebarVisible] = useState(true)
-  const [lastRefreshed, setLastRefreshed] = useState(null)
+  const [, setLastRefreshed] = useState(null)
   const [refreshHandler, setRefreshHandler] = useState(null)
-  const hideTimerRef = useRef(null)
+  const [dashboardTheme, setDashboardTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'light'
+    return window.localStorage.getItem(DASHBOARD_THEME_KEY) === 'dark' ? 'dark' : 'light'
+  })
+  const closeTimerRef = useRef(null)
   const location = useLocation()
   const navigate = useNavigate()
   const connection = getConnectionState()
   const auth = useAuth()
 
-  function clearHideTimer() {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current)
-      hideTimerRef.current = null
+  function clearSidebarTimers() {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
     }
   }
 
-  function showDesktopSidebar() {
-    if (!supportsDesktopAutoHide()) return
-    clearHideTimer()
+  function startDesktopSidebarReveal() {
+    if (!window.matchMedia('(min-width: 1041px) and (hover: hover) and (pointer: fine)').matches) return
+    clearSidebarTimers()
     setDesktopSidebarVisible(true)
   }
 
-  function scheduleDesktopSidebarHide() {
-    if (!supportsDesktopAutoHide()) return
-    clearHideTimer()
-    hideTimerRef.current = setTimeout(() => {
-      setDesktopSidebarVisible(false)
-      hideTimerRef.current = null
-    }, SIDEBAR_HIDE_DELAY)
+  function keepDesktopSidebarOpen() {
+    clearSidebarTimers()
   }
 
-  useEffect(() => clearHideTimer, [])
+  function scheduleDesktopSidebarClose() {
+    if (!window.matchMedia('(min-width: 1041px)').matches) return
+    closeTimerRef.current = setTimeout(() => {
+      setDesktopSidebarVisible(false)
+      closeTimerRef.current = null
+    }, SIDEBAR_CLOSE_DELAY)
+  }
+
+  useEffect(() => clearSidebarTimers, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_THEME_KEY, dashboardTheme)
+  }, [dashboardTheme])
+
+  useEffect(() => {
+    document.documentElement.classList.add('dashboard-scrollbar-hidden')
+    document.body.classList.add('dashboard-scrollbar-hidden')
+
+    return () => {
+      document.documentElement.classList.remove('dashboard-scrollbar-hidden')
+      document.body.classList.remove('dashboard-scrollbar-hidden')
+    }
+  }, [])
 
   useEffect(() => {
     function handleKeyDown(event) {
       const isShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b'
-      if (isShortcut) {
+      if (isShortcut && window.matchMedia('(max-width: 1040px)').matches) {
         event.preventDefault()
-        clearHideTimer()
-        if (supportsDesktopAutoHide()) {
-          setDesktopSidebarVisible((visible) => !visible)
-        } else {
-          setMobileSidebarOpen((open) => !open)
-        }
+        setMobileSidebarOpen((open) => !open)
       }
       if (event.key === 'Escape') {
         setMobileSidebarOpen(false)
@@ -167,16 +176,17 @@ export function AppLayout() {
 
   const context = useMemo(
     () => ({
+      dashboardTheme,
       setPageMeta: ({ lastRefreshed: refreshed, refresh }) => {
         setLastRefreshed(refreshed || null)
         setRefreshHandler(() => refresh || null)
       },
     }),
-    [],
+    [dashboardTheme],
   )
 
   return (
-    <div className={`app-shell ${desktopSidebarVisible ? 'sidebar-is-visible' : 'sidebar-is-hidden'}`}>
+    <div className={`app-shell dashboard-${dashboardTheme} ${desktopSidebarVisible ? 'sidebar-is-visible' : 'sidebar-is-hidden'}`}>
       <PolygonMotif
         size={360}
         sides={5}
@@ -196,14 +206,15 @@ export function AppLayout() {
       <div
         className="sidebar-activation-zone"
         aria-hidden="true"
-        onPointerEnter={showDesktopSidebar}
+        onPointerEnter={startDesktopSidebarReveal}
+        onPointerLeave={scheduleDesktopSidebarClose}
       />
       <Sidebar
         mobileOpen={mobileSidebarOpen}
         desktopVisible={desktopSidebarVisible}
         onClose={() => setMobileSidebarOpen(false)}
-        onPointerEnter={showDesktopSidebar}
-        onPointerLeave={scheduleDesktopSidebarHide}
+        onPointerEnter={keepDesktopSidebarOpen}
+        onPointerLeave={scheduleDesktopSidebarClose}
       />
       <div className="main-shell">
         <header className="topbar">
@@ -216,12 +227,26 @@ export function AppLayout() {
             <p className="topbar-subtitle">{subtitle}</p>
           </div>
           <div className="topbar-actions">
-            <span className={`connection ${connection.configured ? 'connection-ok' : 'connection-bad'}`}>
+            <button
+              type="button"
+              className="icon-button dashboard-theme-toggle"
+              onClick={() => setDashboardTheme((theme) => theme === 'light' ? 'dark' : 'light')}
+              aria-label={`Switch to ${dashboardTheme === 'light' ? 'dark' : 'light'} dashboard design`}
+              aria-pressed={dashboardTheme === 'dark'}
+              title={`Use ${dashboardTheme === 'light' ? 'dark' : 'light'} design`}
+            >
+              {dashboardTheme === 'light'
+                ? <Moon size={18} aria-hidden="true" />
+                : <Sun size={18} aria-hidden="true" />}
+            </button>
+            <span
+              className={`connection ${connection.configured ? 'connection-ok' : 'connection-bad'}`}
+              aria-label={connection.configured ? 'Supabase connected' : 'Supabase connection unavailable'}
+              role="status"
+            >
               <span className="connection-dot" aria-hidden="true" />
               <Database size={15} aria-hidden="true" />
-              {connection.configured ? 'Supabase connected' : 'Supabase missing'}
             </span>
-            <span className="last-refresh">Last refreshed: {lastRefreshed ? formatDate(lastRefreshed) : 'Not yet'}</span>
             <button type="button" className="button button-primary" onClick={() => refreshHandler?.()} disabled={!refreshHandler}>
               <RefreshCcw size={16} aria-hidden="true" />
               Refresh
@@ -238,7 +263,7 @@ export function AppLayout() {
           </div>
         </header>
         <main className="content">
-          {connection.error ? <ConfigState message={connection.error} /> : <Outlet context={context} />}
+          {connection.error ? <ConfigState message={connection.error} /> : <Outlet key={auth.user?.id} context={context} />}
         </main>
       </div>
     </div>

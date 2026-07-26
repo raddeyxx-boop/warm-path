@@ -1,5 +1,6 @@
 const fs = require("fs/promises");
 const path = require("path");
+const { resilientClick } = require("../services/playwright-actions");
 
 const FAILURE_DIR = path.resolve(__dirname, "..", "debug", "comment-open-failures");
 const EDITOR_SELECTORS = [
@@ -128,16 +129,17 @@ async function humanClickCommentButton(page, button, options = {}) {
         );
     }
 
-    console.log("Hovering...");
-    await button.hover({
-        timeout: Math.min(actionTimeoutMs, 2500)
-    }).catch(() => {});
-    console.log("Waiting...");
-    await pause(page, hoverMinMs, hoverMaxMs);
     console.log("Clicking...");
-    await button.click({
+    await resilientClick(button, {
+        context: "CommentSectionOpener.openCommentSection",
+        page,
         delay: randomInt(70, 170),
-        timeout: actionTimeoutMs
+        timeout: actionTimeoutMs,
+        pauseBeforeClick: async () => {
+            console.log("Hovering...");
+            console.log("Waiting...");
+            await pause(page, hoverMinMs, hoverMaxMs);
+        }
     });
     console.log("Comment button clicked.");
 }

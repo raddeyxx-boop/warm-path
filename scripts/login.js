@@ -1,11 +1,18 @@
 const { chromium } = require("playwright");
+const { LINKEDIN_SESSION_PATH } = require("../config/linkedin-session");
+
+delete process.env.PWDEBUG;
+delete process.env.PWDEBUGIMPL;
 
 (async () => {
   const browser = await chromium.launch({
-    headless: false
+    headless: true,
+    devtools: false
   });
 
-  const context = await browser.newContext();
+  const context = await browser.newContext({
+    viewport: { width: 1440, height: 900 }
+  });
 
   const page = await context.newPage();
 
@@ -16,10 +23,10 @@ const { chromium } = require("playwright");
 
   process.stdin.once("data", async () => {
     await context.storageState({
-      path: "./sessions/linkedin.json"
+      path: LINKEDIN_SESSION_PATH
     });
 
-    console.log("Session Saved");
+    console.log("Session Saved", { session_path: LINKEDIN_SESSION_PATH });
     await browser.close();
   });
 })();

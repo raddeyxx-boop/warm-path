@@ -1,4 +1,7 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const { validateN8NPayloadContext } = require("../scripts/send-to-n8n");
 
 const { normalizeCompany } = require("../utils/CompanyNormalizer");
 const { normalizeDepartment } = require("../utils/DepartmentNormalizer");
@@ -9,6 +12,7 @@ const {
     fullNameSearchStrategy
 } = require("../utils/SearchStrategy");
 const {
+    employmentFromHeadline,
     scoreProfileSuggestion
 } = require("../utils/ProfileVerification");
 const {
@@ -28,7 +32,7 @@ const {
 const { ALL_TECHNOLOGIES, matchTechnologies } = require("../utils/TechnologyDictionary");
 const { buildRelationshipEvidence } = require("../scripts/Relationship-Evidence");
 const { classifyProfile } = require("../scripts/role-classifier");
-const { serializeFinalProfile } = require("../utils/FinalProfileSerializer");
+const { serializeFinalProfile, serializeRelationshipEvidence } = require("../utils/FinalProfileSerializer");
 const { mergeTargetProfile } = require("../utils/mergeTargetProfile");
 const { derivePositionFromHeadline } = require("../scripts/extractors/header");
 const { dedupeEducationRecords } = require("../scripts/extractors/education");
@@ -43,8 +47,30 @@ const {
     isSuitableProfessionalPost
 } = require("../scripts/HumanActivity");
 const {
-    getTargetCompany
+    getTargetCompany,
+    getTargetSchool,
+    prepareSearchBox
 } = require("../scripts/search-pavel");
+const { parseArgs } = require("../index");
+
+async function testPrepareSearchBoxUsesHumanPointerAndKeyboardClear() {
+    const calls = [];
+    const searchBox = {
+        waitFor: async options => calls.push(["waitFor", options]),
+        scrollIntoViewIfNeeded: async () => calls.push(["scrollIntoViewIfNeeded"]),
+        click: async options => calls.push(["click", options]),
+        press: async key => calls.push(["press", key]),
+        page: () => ({ waitForTimeout: async () => calls.push(["waitForTimeout"]) })
+    };
+
+    await prepareSearchBox(searchBox);
+    assert.deepStrictEqual(calls.slice(0, 3).map(call => call[0]), ["waitFor", "scrollIntoViewIfNeeded", "click"]);
+    assert.deepStrictEqual(calls.filter(call => call[0] === "press").map(call => call[1]), [
+        process.platform === "darwin" ? "Meta+A" : "Control+A",
+        "Backspace"
+    ]);
+    assert.strictEqual(calls.some(call => call[0] === "fill"), false);
+}
 
 function testCompanyNormalization() {
     assert.strictEqual(normalizeCompany("Indpro AB"), "indpro");
@@ -159,6 +185,14 @@ function testHumanSearchStrategies() {
 }
 
 function testProfileVerification() {
+    assert.deepStrictEqual(employmentFromHeadline("Software Engineer at Indpro AB"), {
+        position: "Software Engineer",
+        company: "Indpro AB"
+    });
+    assert.deepStrictEqual(employmentFromHeadline("Software Engineer | React"), {
+        position: "",
+        company: ""
+    });
     const normalizeProfileUrl = value => {
         const url = new URL(value, "https://www.linkedin.com");
 
@@ -222,6 +256,28 @@ function testProfileVerification() {
         headline: false,
         location: false,
         position: false
+    });
+
+    const derivedEmployment = scoreProfileSuggestion({
+        href: "https://www.linkedin.com/in/someone-else/",
+        text: "Jnanesha V G Accounts Executive at Indpro"
+    }, {
+        name: "Jnanesha V G",
+        headline: "Accounts Executive at Indpro"
+    }, { normalizeProfileUrl, threshold: 80 });
+    assert.deepStrictEqual(derivedEmployment.fieldChecks, {
+        name: true,
+        company: true,
+        headline: true,
+        location: false,
+        position: true
+    });
+    assert.deepStrictEqual(derivedEmployment.fieldMatches, {
+        name: true,
+        company: true,
+        headline: true,
+        location: false,
+        position: true
     });
 }
 
@@ -429,7 +485,7 @@ function testTechnologyExtraction() {
 }
 
 function testRelationshipEngine() {
-    const profile = buildRelationshipEvidence({
+    const exactCurrentMatch = buildRelationshipEvidence({
         name: "Candidate",
         current_company: "Indpro AB",
         location: "Bengaluru, Karnataka, India",
@@ -451,17 +507,68 @@ function testRelationshipEngine() {
         position: "Backend Engineer",
         skills: ["Node.js"]
     });
-    const result = profile.relationship_evidence;
+    const result = exactCurrentMatch.relationship_evidence;
 
     assert.strictEqual(result.same_company, true);
     assert.strictEqual(result.current_employee, true);
+    assert.ok(result.years_at_company > 0);
     assert.ok(result.experience_overlap.includes("indpro"));
     assert.ok(result.shared_skills.includes("Node.js"));
     assert.ok(result.relationship_strength >= 60);
     assert.ok(result.explanations.length > 0);
-    assert.ok(profile.relationship_summary.includes("Works at Indpro AB"));
-    assert.ok(profile.relationship_summary.includes("Based in Bengaluru"));
-    assert.ok(profile.relationship_summary.some(item => item.includes("Shared skills: Node.js")));
+    assert.ok(exactCurrentMatch.relationship_summary.includes("Works at Indpro AB"));
+    assert.ok(exactCurrentMatch.relationship_summary.includes("Based in Bengaluru"));
+    assert.ok(exactCurrentMatch.relationship_summary.some(item => item.includes("Shared skills: Node.js")));
+
+    const historicalOnly = buildRelationshipEvidence({
+        name: "Historical Candidate",
+        current_company: "Byggmax AB",
+        experience: [{
+            company: "Indpro AB",
+            duration: { start: "2020-01", end: "2022-01", currently_working: false }
+        }]
+    }, { company: "Indpro" });
+    assert.strictEqual(historicalOnly.relationship_evidence.same_company, false);
+    assert.strictEqual(historicalOnly.relationship_evidence.current_employee, false);
+    assert.strictEqual(historicalOnly.relationship_evidence.years_at_company, 0);
+    assert.deepStrictEqual(historicalOnly.relationship_evidence.experience_overlap, ["indpro"]);
+
+    const contradictoryCurrentRows = buildRelationshipEvidence({
+        name: "Renu Gangwar",
+        current_company: "Byggmax AB",
+        experience: [
+            {
+                company: "Byggmax AB",
+                duration: { start: "2023-09", end: null, currently_working: true }
+            },
+            {
+                company: "Indpro AB",
+                duration: { start: "2016-11", end: null, currently_working: true }
+            }
+        ]
+    }, { company: "Indpro" });
+    assert.strictEqual(contradictoryCurrentRows.relationship_evidence.same_company, false);
+    assert.strictEqual(contradictoryCurrentRows.relationship_evidence.current_employee, false);
+    assert.strictEqual(contradictoryCurrentRows.relationship_evidence.years_at_company, 0);
+    assert.deepStrictEqual(
+        contradictoryCurrentRows.relationship_evidence.experience_overlap,
+        ["indpro"]
+    );
+
+    const normalizedMatch = buildRelationshipEvidence({
+        name: "Normalized Match",
+        current_company: "INDPRO AB"
+    }, { current_company: "indpro" });
+    assert.strictEqual(normalizedMatch.relationship_evidence.same_company, true);
+    assert.strictEqual(normalizedMatch.relationship_evidence.current_employee, true);
+
+    const noTargetCompany = buildRelationshipEvidence({
+        name: "No Target Company",
+        current_company: "Byggmax AB"
+    }, { name: "Target" });
+    assert.strictEqual(noTargetCompany.relationship_evidence.same_company, false);
+    assert.strictEqual(noTargetCompany.relationship_evidence.current_employee, false);
+    assert.strictEqual(noTargetCompany.relationship_evidence.years_at_company, 0);
 }
 
 function testFinalProfileSerializer() {
@@ -480,7 +587,7 @@ function testFinalProfileSerializer() {
             company: "Indpro AB",
             duration: "jan-2024 - jan-2025"
         }],
-        education: [{ school: "Ramaiah College Of Arts, Science and Commerce" }],
+        education: [{ school: "Stanford University" }],
         skills: [],
         has_about: true,
         role: "Business Development",
@@ -496,7 +603,7 @@ function testFinalProfileSerializer() {
             same_location: true,
             candidate_location: "Bengaluru, Karnataka, India",
             same_school: true,
-            candidate_school: "Ramaiah College Of Arts, Science and Commerce",
+            candidate_school: "Stanford University",
             same_department: false,
             department_similarity: 0.8,
             years_at_company: 0.7,
@@ -512,6 +619,7 @@ function testFinalProfileSerializer() {
         "headline",
         "location",
         "about",
+        "company",
         "current_company",
         "position",
         "followers",
@@ -519,6 +627,7 @@ function testFinalProfileSerializer() {
         "experience",
         "education",
         "skills",
+        "technologies",
         "relationship_evidence",
         "relationship_summary",
         "role",
@@ -544,7 +653,7 @@ function testFinalProfileSerializer() {
     assert.deepStrictEqual(profile.relationship_summary, [
         "Works at Indpro AB",
         "Based in Bengaluru",
-        "Studied at Ramaiah College",
+        "Studied at Stanford University",
         "Business Development role"
     ]);
 
@@ -576,6 +685,51 @@ function testFinalProfileSerializer() {
     ]);
 }
 
+function testRelationshipEvidenceSerializerContract() {
+    const keys = [
+        "same_company", "same_location", "same_school", "same_department",
+        "shared_skills", "shared_technologies", "experience_overlap", "education_overlap",
+        "department_similarity", "years_at_company", "current_employee"
+    ];
+    const current = serializeRelationshipEvidence({
+        same_company: true, same_location: true, same_school: false,
+        same_department: false, shared_skills: [], shared_technologies: [],
+        experience_overlap: [], education_overlap: [], department_similarity: 0,
+        years_at_company: 7.8, current_employee: true
+    });
+    assert.deepStrictEqual(Object.keys(current), keys);
+    assert.deepStrictEqual(current, {
+        same_company: true, same_location: true, same_school: false,
+        same_department: false, shared_skills: [], shared_technologies: [],
+        experience_overlap: [], education_overlap: [], department_similarity: 0,
+        years_at_company: 7.8, current_employee: true
+    });
+
+    const former = serializeRelationshipEvidence({
+        same_company: true, same_location: false, same_school: false,
+        same_department: true, department_similarity: 1,
+        years_at_company: 0, current_employee: false
+    });
+    assert.strictEqual(former.current_employee, false);
+    assert.strictEqual(former.same_location, false);
+    assert.strictEqual(former.years_at_company, 0);
+    assert.strictEqual(serializeRelationshipEvidence(), null);
+    assert.deepStrictEqual(serializeRelationshipEvidence({
+        department_similarity: "0.8", years_at_company: "19.3"
+    }).department_similarity, 0.8);
+    assert.strictEqual(serializeRelationshipEvidence({
+        department_similarity: "0.8", years_at_company: "19.3"
+    }).years_at_company, 19.3);
+    assert.deepStrictEqual(serializeRelationshipEvidence({
+        department_similarity: "invalid", years_at_company: null
+    }), {
+        same_company: false, same_location: false, same_school: false,
+        same_department: false, shared_skills: [], shared_technologies: [],
+        experience_overlap: [], education_overlap: [], department_similarity: null,
+        years_at_company: null, current_employee: false
+    });
+}
+
 function testBusinessDeveloperRoleClassification() {
     const profile = classifyProfile({
         name: "Mukesh",
@@ -593,7 +747,11 @@ function testBusinessDeveloperRoleClassification() {
 function testTargetProfileMergeUsesMutualSchema() {
     const target = {
         name: "Target",
+        linkedin_name: "Target",
         company: "Indpro AB",
+        company_filter: "Indpro AB",
+        school_filter: "Stanford University",
+        keywords: "automation",
         url: "https://www.linkedin.com/in/target/",
         createdAt: "2026-01-01T00:00:00.000Z",
         title: "Old lightweight title",
@@ -621,12 +779,29 @@ function testTargetProfileMergeUsesMutualSchema() {
     assert.strictEqual(merged.bodyLength, undefined);
     assert.strictEqual(merged.createdAt, target.createdAt);
     assert.strictEqual(merged.url, target.url);
-    assert.deepStrictEqual(
-        Object.keys(merged).filter(key => !["createdAt", "url"].includes(key)).sort(),
-        Object.keys(mutualProfileShape).sort()
-    );
+    assert.strictEqual(merged.linkedin_name, "Target");
+    assert.strictEqual(merged.linkedin_url, target.url);
+    assert.strictEqual(merged.company, "Indpro AB");
+    assert.strictEqual(merged.company_filter, "Indpro AB");
+    assert.strictEqual(merged.school_filter, "Stanford University");
+    assert.strictEqual(merged.keywords, "automation");
     assert.strictEqual(merged.followers, 1000);
     assert.strictEqual(merged.connections, 500);
+}
+
+function testTargetProfileMergeDoesNotDeriveSchoolFilter() {
+    const merged = mergeTargetProfile({
+        name: "Target",
+        company: "Indpro AB",
+        school_filter: null
+    }, {
+        name: "Target",
+        current_company: "Indpro AB",
+        education: [{ school: "Scraped School Must Not Become A Filter" }]
+    });
+
+    assert.strictEqual(merged.school_filter, "");
+    assert.strictEqual(merged.education[0].school, "Scraped School Must Not Become A Filter");
 }
 
 function testHeaderPositionExtraction() {
@@ -642,13 +817,13 @@ function testHeaderPositionExtraction() {
 function testEducationDeduplication() {
     const education = dedupeEducationRecords([
         {
-            school: "Ramaiah College Of Arts, Science and Commerce",
+            school: "Stanford University",
             degree: "Bachelor of Science - BS",
             field_of_study: "Computer Science and Electronics",
             dates: "Nov 2021 - Jul 2024"
         },
         {
-            school: "Ramaiah College Of Arts, Science and Commerce",
+            school: "Stanford University",
             degree: "Bachelor of Science - BS",
             field_of_study: "Computer Science and Electronics",
             dates: "2021 - Aug 2024"
@@ -718,10 +893,183 @@ function testCurrentExperienceAlignment() {
 
 function testConnectionFilterTargetFields() {
     const target = {
-        current_company: "Indpro AB"
+        company: "Indpro AB",
+        current_company: "Indpro AB",
+        education: [{ school: "Stanford University" }]
     };
 
     assert.strictEqual(getTargetCompany(target), "Indpro AB");
+    assert.strictEqual(getTargetCompany({ current_company: "Scraped Company" }), "");
+    assert.strictEqual(getTargetSchool(target), "");
+    assert.strictEqual(getTargetSchool({ school_filter: "Stanford" }), "Stanford");
+}
+
+function testLegacyLinkedInUrlMapping() {
+    const previous = process.env.WARM_PATH_TARGET_JSON;
+    process.env.WARM_PATH_TARGET_JSON = JSON.stringify({
+        name: "Gurupreet Singh",
+        current_company: "Indpro AB",
+        linkedin_name: "https://www.linkedin.com/in/gurupreet-singh-2344aa2bb/",
+        company_filter: "Indpro AB"
+    });
+
+    try {
+        const target = parseArgs(["node", "index.js"]);
+        assert.strictEqual(target.linkedin_name, "Gurupreet Singh");
+        assert.strictEqual(target.linkedin_url, "https://www.linkedin.com/in/gurupreet-singh-2344aa2bb/");
+        assert.strictEqual(target.url, target.linkedin_url);
+        assert.strictEqual(target.company, "Indpro AB");
+    } finally {
+        if (previous === undefined) delete process.env.WARM_PATH_TARGET_JSON;
+        else process.env.WARM_PATH_TARGET_JSON = previous;
+    }
+}
+
+function testHumanNavigationWorkflowInvariants() {
+    const targetSearchSource = fs.readFileSync(
+        path.join(__dirname, "..", "scripts", "search-pavel.js"),
+        "utf8"
+    );
+    const mutualSearchSource = fs.readFileSync(
+        path.join(__dirname, "..", "scripts", "scrape-profile-details.js"),
+        "utf8"
+    );
+    const mutualFunction = mutualSearchSource.slice(
+        mutualSearchSource.indexOf("async function findAndOpenProfile"),
+        mutualSearchSource.indexOf("function profileMatchesTarget")
+    );
+
+    assert.doesNotMatch(targetSearchSource, /page\.goto\((?:connectionsUrl|expectedHref)/);
+    assert.doesNotMatch(mutualFunction, /openLinkedInHome\s*\(/);
+    assert.doesNotMatch(mutualFunction, /restoreMutualsPage|loadMutualsParentState/);
+    assert.match(mutualFunction, /currentSearchBox/);
+    assert.match(mutualFunction, /Searching next mutual from current profile/);
+    assert.match(mutualFunction, /await runProfileSearch\(/);
+    assert.match(mutualFunction, /normalizeProfileUrl\(page\.url\(\)\) !== expectedUrl/);
+}
+
+function testMutualOnlyFullScrollCycle() {
+    const mutualSource = fs.readFileSync(
+        path.join(__dirname, "..", "scripts", "scrape-profile-details.js"),
+        "utf8"
+    );
+    const targetSource = fs.readFileSync(
+        path.join(__dirname, "..", "scripts", "search-pavel.js"),
+        "utf8"
+    );
+    const mutualReader = mutualSource.slice(
+        mutualSource.indexOf("async function humanReadMutualProfile"),
+        mutualSource.indexOf("async function humanReadProfile")
+    );
+
+    assert.match(mutualSource, /scrapeProfile\(page, \{ mutualProfile: true \}\)/);
+    assert.doesNotMatch(targetSource, /mutualProfile:\s*true/);
+    assert.match(mutualReader, /stableBottomCount < 3/);
+    assert.match(mutualReader, /state\.scrollY <= 20/);
+    assert.ok(
+        mutualReader.indexOf("[MUTUAL] Bottom reached") <
+        mutualReader.indexOf("[MUTUAL] Starting upward reading")
+    );
+    assert.ok(
+        mutualReader.indexOf("[MUTUAL] Top reached") <
+        mutualReader.indexOf("[MUTUAL] Human reading completed")
+    );
+}
+
+function testTargetFullScrollCycleCompletesBeforeConnections() {
+    const scraperSource = fs.readFileSync(
+        path.join(__dirname, "..", "scripts", "scrape-profile-details.js"),
+        "utf8"
+    );
+    const targetSource = fs.readFileSync(
+        path.join(__dirname, "..", "scripts", "search-pavel.js"),
+        "utf8"
+    );
+    const targetReader = scraperSource.slice(
+        scraperSource.indexOf("async function humanReadTargetProfile"),
+        scraperSource.indexOf("async function humanReadProfile")
+    );
+
+    assert.match(targetSource, /scrapeProfile\(page, \{ targetProfile: true \}\)/);
+    assert.match(targetReader, /stableBottomCount < 3/);
+    assert.match(targetReader, /state\.scrollY <= 20/);
+    assert.ok(
+        targetReader.indexOf("[TARGET] Bottom reached") <
+        targetReader.indexOf("[TARGET] Starting upward reading")
+    );
+    assert.ok(
+        targetReader.indexOf("[TARGET] Top reached") <
+        targetReader.indexOf("[TARGET] Human reading completed")
+    );
+    assert.ok(
+        targetSource.indexOf("await processTargetProfile") <
+        targetSource.indexOf("[TARGET] Opening Connections page")
+    );
+    assert.match(scraperSource, /scrapeProfile\(page, \{ mutualProfile: true \}\)/);
+}
+
+function testMutualResultsHumanBrowsingCycle() {
+    const source = fs.readFileSync(
+        path.join(__dirname, "..", "scripts", "collect-mutuals.js"),
+        "utf8"
+    );
+    const scrollFunction = source.slice(
+        source.indexOf("async function scrollToBottom"),
+        source.indexOf("async function getCurrentPageNumber")
+    );
+    const paginationFunction = source.slice(
+        source.indexOf("async function goToNextPage"),
+        source.indexOf("async function getPageSignature")
+    );
+
+    assert.match(scrollFunction, /await waitForVisibleResultsToSettle\(page, sourcePage\)/);
+    assert.match(scrollFunction, /await returnResultsToTopNaturally\(page, scrollTarget, sourcePage\)/);
+    assert.match(scrollFunction, /stableRounds >= LIMITS\.stableScrollRounds/);
+    assert.doesNotMatch(scrollFunction, /scrollTop\s*=\s*element\.scrollHeight/);
+    assert.match(paginationFunction, /Pagination verified and Next is visible/);
+    assert.ok(
+        paginationFunction.indexOf("await waitForLinkedInResultsPageChange") <
+        paginationFunction.indexOf("Next results page loaded; top reset will run before browsing")
+    );
+}
+
+function testN8NPayloadContextValidation() {
+    const valid = {
+        ownerUserId: "33333333-3333-4333-8333-333333333333",
+        workflowRunId: "66666666-6666-4666-8666-666666666666",
+        searchRequestId: "77777777-7777-4777-8777-777777777777",
+        target: { name: "Ali Elsheik" }
+    };
+    assert.doesNotThrow(() => validateN8NPayloadContext(valid));
+    assert.throws(() => validateN8NPayloadContext({ ...valid, ownerUserId: "" }), /OWNER_USER_ID is missing/);
+    assert.throws(() => validateN8NPayloadContext({ ...valid, workflowRunId: "" }), /WORKFLOW_RUN_ID is missing/);
+    assert.throws(() => validateN8NPayloadContext({ ...valid, searchRequestId: "" }), /SEARCH_REQUEST_ID is missing/);
+    assert.throws(() => validateN8NPayloadContext({ ...valid, target: null }), /Target input is missing/);
+    assert.throws(() => validateN8NPayloadContext({ ...valid, target: {} }), /Target name is missing/);
+}
+
+function testCurrentN8NExportPreservesRunContext() {
+    const exported = JSON.parse(fs.readFileSync(
+        path.join(__dirname, "..", "n8n_backup", "current-warm-path-clean-response.json"),
+        "utf8"
+    ));
+    const workflow = Array.isArray(exported) ? exported[0] : exported;
+    const nodes = new Map(workflow.nodes.map(node => [node.name, node]));
+    const splitCode = nodes.get("Split Profiles").parameters.jsCode;
+    const reportCode = nodes.get("Build Final Report").parameters.jsCode;
+    const candidateFields = nodes.get("Save Candidates").parameters.fieldsUi.fieldValues;
+    const fieldMap = new Map(candidateFields.map(field => [field.fieldId, field.fieldValue]));
+
+    for (const field of ["owner_user_id", "workflow_run_id", "search_request_id"]) {
+        assert.match(splitCode, new RegExp(field));
+        assert.match(reportCode, new RegExp(field));
+    }
+    assert.strictEqual(fieldMap.get("owner_user_id"), "={{ $('Webhook').first().json.body.owner_user_id }}");
+    assert.strictEqual(fieldMap.get("workflow_run_id"), "={{ $('Webhook').first().json.body.workflow_run_id }}");
+    assert.strictEqual(fieldMap.get("search_request_id"), "={{ $('Webhook').first().json.body.search_request_id }}");
+    const deleteFields = nodes.get("Delete Old Candidates").parameters.filters.conditions.map(condition => condition.keyName);
+    assert.deepStrictEqual(deleteFields, ["owner_user_id", "workflow_run_id"]);
+    assert.deepStrictEqual(workflow.connections["Delete Old Candidates"].main, [[]]);
 }
 
 testCompanyNormalization();
@@ -736,13 +1084,26 @@ testNumericNormalization();
 testTechnologyExtraction();
 testRelationshipEngine();
 testFinalProfileSerializer();
+testRelationshipEvidenceSerializerContract();
 testBusinessDeveloperRoleClassification();
 testTargetProfileMergeUsesMutualSchema();
+testTargetProfileMergeDoesNotDeriveSchoolFilter();
 testHeaderPositionExtraction();
 testEducationDeduplication();
 testSkillUiFiltering();
 testBusinessSkillInference();
 testCurrentExperienceAlignment();
 testConnectionFilterTargetFields();
-
-console.log("Validation tests passed.");
+testLegacyLinkedInUrlMapping();
+testHumanNavigationWorkflowInvariants();
+testMutualOnlyFullScrollCycle();
+testTargetFullScrollCycleCompletesBeforeConnections();
+testMutualResultsHumanBrowsingCycle();
+testN8NPayloadContextValidation();
+testCurrentN8NExportPreservesRunContext();
+testPrepareSearchBoxUsesHumanPointerAndKeyboardClear()
+    .then(() => console.log("Validation tests passed."))
+    .catch(error => {
+        console.error(error);
+        process.exitCode = 1;
+    });

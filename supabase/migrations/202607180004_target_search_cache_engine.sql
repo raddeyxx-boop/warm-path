@@ -210,15 +210,17 @@ begin
     return;
   end if;
 
-  for snapshot_item in select value from jsonb_array_elements(cache_record.candidate_snapshot)
-  loop
+  begin
+    for snapshot_item in select value from jsonb_array_elements(cache_record.candidate_snapshot)
+    loop
     candidate_data := snapshot_item -> 'candidate';
 
     if snapshot_item ->> 'table' = 'ranked_candidates' then
       insert into public.ranked_candidates (
         owner_user_id, workflow_run_id, rank, final_score, final_grade, name, linkedin_url,
         current_company, position, location, role, seniority, decision_power, warm_score,
-        recommendation, explanation, personalized_introduction, profile, analysis, ai_analysis
+        recommendation, explanation, personalized_introduction, profile, analysis, ai_analysis,
+        relationship_evidence, top_candidate_reason
       ) values (
         current_owner, workflow_record.id, (candidate_data ->> 'rank')::integer,
         nullif(candidate_data ->> 'final_score', '')::numeric, candidate_data ->> 'final_grade',
@@ -227,14 +229,17 @@ begin
         candidate_data ->> 'seniority', candidate_data ->> 'decision_power',
         nullif(candidate_data ->> 'warm_score', '')::numeric, candidate_data ->> 'recommendation',
         candidate_data ->> 'explanation', candidate_data ->> 'personalized_introduction',
-        candidate_data -> 'profile', candidate_data -> 'analysis', candidate_data -> 'ai_analysis'
+        candidate_data -> 'profile', candidate_data -> 'analysis', candidate_data -> 'ai_analysis',
+        coalesce(candidate_data -> 'relationship_evidence', '{}'::jsonb),
+        coalesce(candidate_data -> 'top_candidate_reason', '{}'::jsonb)
       );
       ranked_count := ranked_count + 1;
     else
       insert into public.top_candidates (
         owner_user_id, workflow_run_id, rank, final_score, final_grade, name, linkedin_url,
         current_company, position, location, role, seniority, decision_power, warm_score,
-        recommendation, explanation, personalized_introduction, profile, analysis, ai_analysis
+        recommendation, explanation, personalized_introduction, profile, analysis, ai_analysis,
+        relationship_evidence, top_candidate_reason
       ) values (
         current_owner, workflow_record.id, (candidate_data ->> 'rank')::integer,
         nullif(candidate_data ->> 'final_score', '')::numeric, candidate_data ->> 'final_grade',
@@ -243,11 +248,23 @@ begin
         candidate_data ->> 'seniority', candidate_data ->> 'decision_power',
         nullif(candidate_data ->> 'warm_score', '')::numeric, candidate_data ->> 'recommendation',
         candidate_data ->> 'explanation', candidate_data ->> 'personalized_introduction',
-        candidate_data -> 'profile', candidate_data -> 'analysis', candidate_data -> 'ai_analysis'
+        candidate_data -> 'profile', candidate_data -> 'analysis', candidate_data -> 'ai_analysis',
+        coalesce(candidate_data -> 'relationship_evidence', '{}'::jsonb),
+        coalesce(candidate_data -> 'top_candidate_reason', '{}'::jsonb)
       );
       top_count := top_count + 1;
     end if;
-  end loop;
+    end loop;
+  exception when others then
+    raise warning 'Invalid cached candidate for cache %, table %, rank %: [%] %',
+      cache_record.id, snapshot_item ->> 'table', candidate_data ->> 'rank', sqlstate, sqlerrm;
+    return query select 'cache_invalid', current_owner, workflow_record.id, search_record.id, 'running',
+      search_record.target_name, search_record.current_company, search_record.linkedin_name,
+      search_record.location, search_record.keywords, search_record.company_filter,
+      search_record.school_filter, search_record.normalized_search_key, cache_record.id,
+      cache_record.source_workflow_run_id, 0, 0;
+    return;
+  end;
 
   update public.search_requests
   set status = 'completed', cache_hit = true, completed_at = transition_time

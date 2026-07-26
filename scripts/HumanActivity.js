@@ -7,6 +7,7 @@ const {
 const {
     openCommentSection
 } = require("./CommentSectionOpener");
+const { resilientClick } = require("../services/playwright-actions");
 
 const COMMENT_EDITOR_SELECTORS = [
     '[contenteditable="true"]',
@@ -105,10 +106,12 @@ async function maybeHoverAmbientElement(page) {
         "main button"
     ];
     const selector = selectors[randomInt(0, selectors.length - 1)];
-    const candidates = await page.locator(selector).elementHandles().catch(() => []);
-    const shuffled = candidates.sort(() => Math.random() - 0.5).slice(0, 6);
+    const candidates = page.locator(selector);
+    const indices = Array.from({ length: Math.min(await candidates.count().catch(() => 0), 12) }, (_, index) => index)
+        .sort(() => Math.random() - 0.5).slice(0, 6);
 
-    for (const candidate of shuffled) {
+    for (const index of indices) {
+        const candidate = candidates.nth(index);
         const box = await candidate.boundingBox().catch(() => null);
 
         if (!box || box.width < 12 || box.height < 12) {
@@ -163,13 +166,12 @@ async function expandFirstPostIfNeeded(page, post, options = {}) {
     }
 
     await pause(page, options.waitBeforeClickMinMs || 500, options.waitBeforeClickMaxMs || 1500);
-    await moreButton.hover({
-        timeout: 1500
-    }).catch(() => {});
-    await pause(page, 300, 800);
-    await moreButton.click({
+    await resilientClick(moreButton, {
+        context: "HumanActivity.expandFirstPostIfNeeded",
+        page,
         delay: randomInt(70, 180),
-        timeout: 3000
+        timeout: 3000,
+        pauseBeforeClick: () => pause(page, 300, 800)
     });
 
     await moreButton.waitFor({
@@ -272,9 +274,10 @@ async function openRandomPost(page, post) {
     }).first();
 
     if (await seeMoreButton.isVisible({ timeout: 1200 }).catch(() => false)) {
-        await seeMoreButton.click({
-            delay: randomInt(60, 150)
-        }).catch(() => {});
+        await resilientClick(seeMoreButton, {
+            context: "HumanActivity.openRandomPost", page,
+            delay: randomInt(60, 150), timeout: 3000
+        }).catch(error => console.log("Post expansion failed. Continuing to read:", error.message));
     }
 
     await pause(page, 1600, 3600);
@@ -317,12 +320,10 @@ async function maybeLikePost(page, post, config = HUMAN_BEHAVIOR_CONFIG) {
             return false;
         }
 
-        await likeButton.hover({
-            timeout: 1200
-        }).catch(() => {});
-        await pause(page, 300, 800);
-        await likeButton.click({
-            delay: randomInt(70, 190)
+        await resilientClick(likeButton, {
+            context: "HumanActivity.maybeLikePost", page,
+            delay: randomInt(70, 190), timeout: 3000,
+            pauseBeforeClick: () => pause(page, 300, 800)
         });
         console.log("Liked random post.");
         await pause(page, 650, 1400);
@@ -345,9 +346,10 @@ async function typeComment(page, post, comment, options = {}) {
         state: "visible",
         timeout: timeoutMs
     });
-    await textbox.click({
-        delay: randomInt(50, 120)
-    });
+    await textbox.focus({ timeout: timeoutMs });
+    if (!await textbox.evaluate(element => element === document.activeElement)) {
+        await textbox.evaluate(element => element.focus());
+    }
 
     for (const char of comment) {
         await page.keyboard.type(char, {
@@ -362,8 +364,9 @@ async function submitComment(page, post) {
     }).last();
 
     if (await submitButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await submitButton.click({
-            delay: randomInt(60, 150)
+        await resilientClick(submitButton, {
+            context: "HumanActivity.submitComment", page,
+            delay: randomInt(60, 150), timeout: 3000
         });
         return true;
     }

@@ -1,0 +1,289 @@
+[
+  {
+    "name": "Ayush Pal",
+    "linkedin_url": "https://www.linkedin.com/in/ayush-pal-2a29a9255/",
+    "headline": "Junior Software Engineer at @INDPRO AB",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "I am passionate about technology, problem-solving, and innovation. With a strong foundation in frontend- development, I enjoy building efficient and scalable solutions. My interests lie in web development, frontend technologies, and real-time systems. Constantly learning and adapting, I strive to enhance my skills in React.js, Node.js, and database management while staying updated with industry trends. I believe in continuous growth, collaboration, and leveraging technology to drive impact. Let’s connect and explore opportunities to learn and grow together! 🚀Top skillsFront-End Development • Back-End Web Development • React.js • Data structure and algorithm • Project Planning",
+    "current_company": "Indpro AB",
+    "position": "Junior Software Engineer",
+    "followers": 489,
+    "connections": 451,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Nanny Tech",
+        "title": "Full-stack Developer",
+        "duration": {
+          "start": "2025-03",
+          "end": "2025-05",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "BCA",
+        "field_of_study": "Computer science",
+        "dates": "Sep 2022 – Aug 2025",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Assam Rifles Public School, Jorhat",
+        "degree": "Higher secondary",
+        "field_of_study": "",
+        "dates": "",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Event Tracker"
+    ],
+    "relationship_evidence": {
+      "same_company": true,
+      "same_location": true,
+      "same_school": true,
+      "same_department": false,
+      "department_similarity": 0,
+      "years_at_company": 0.8,
+      "current_employee": true
+    },
+    "relationship_summary": [
+      "Works at Indpro AB",
+      "Based in Bengaluru",
+      "Studied at Ramaiah College Of Arts, Science and Commerce",
+      "Engineering role"
+    ],
+    "role": "Engineering",
+    "seniority": "Mid",
+    "decision_power": "Low",
+    "hiring_influence": "Low"
+  },
+  {
+    "name": "Jnanesha V G",
+    "linkedin_url": "https://www.linkedin.com/in/jnanesha-v-g/",
+    "headline": "Accounts executive at Indpro",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "I have 7 years of experience in accounting, GST filling,PT filling, TDS filling, and payroll activities like salary preparation and IT declaration works, calculation of tax and issuing Form 16, and monthly MIS report preparation and presentation to management. Top skillsPayroll • Auditing",
+    "current_company": "Indpro",
+    "position": "Accounts executive",
+    "followers": 87,
+    "connections": 83,
+    "experience": [
+      {
+        "company": "Charted Accountant Consulting Firm",
+        "title": "Accountant",
+        "duration": {
+          "start": "2016-08",
+          "end": "2019-02",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Bangalore University",
+        "degree": "Bachelor of Commerce - BCom",
+        "field_of_study": "Accounting and Finance",
+        "dates": "2013 – 2016",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Personal Income Tax Returns",
+      "Tds"
+    ],
+    "relationship_evidence": {
+      "same_company": true,
+      "same_location": true,
+      "same_school": false,
+      "same_department": false,
+      "department_similarity": 0,
+      "years_at_company": 0,
+      "current_employee": true
+    },
+    "relationship_summary": [
+      "Works at Indpro",
+      "Based in Bengaluru",
+      "Finance role"
+    ],
+    "role": "Finance",
+    "seniority": "Junior",
+    "decision_power": "Very Low",
+    "hiring_influence": "Very Low"
+  },
+  {
+    "name": "Md Rashid",
+    "linkedin_url": "https://www.linkedin.com/in/md-rashid-computerengineer/",
+    "headline": "QA Engineer | Manual & Playwright Automation Testing | STLC/SDLC | JIRA | SQL | Agile Scrum | Immediate Joiner",
+    "location": "Greater Bengaluru Area",
+    "about": "I am a QA Engineer with over 1 year of experience in Manual Testing and Playwright UI Automation, committed to delivering high-quality software through structured testing, attention to detail, and effective collaboration. My experience includes testing enterprise web applications across functional, smoke, sanity, and regression cycles, building Playwright automation scripts for UI and browser testing, designing test cases and test scenarios, and logging, tracking, and verifying defects through JIRA. I work closely with developers in Agile Scrum environments and use Chrome DevTools and SQL to investigate and validate issues during testing. Technical Skills- Manual Testing- Playwright UI Automation- SDLC & STLC- Functional Testing- Regression Testing- Smoke Testing- Sanity Testing- Exploratory Testing- API Testing (Postman)- SQL- Bug Reporting & Defect Tracking- Test Case Design- Agile Scrum- JIRA- Chrome DevTools- Git & GitHub- HTML, CSS, JavaScript- React, Angular BasicsI enjoy finding defects before users do and continuously improving my testing skills. I am currently looking for Software QA Engineer / Automation Testing opportunities where I can contribute to delivering reliable, high-quality software while continuing to grow professionally.📍 Bengaluru, India✅ Immediate JoinerTop skillsQuality Assurance Analysis • Quality Assurance • Quality Management • Manual Test Execution • Playwriting",
+    "current_company": "Indpro AB",
+    "position": "QA Engineer",
+    "followers": 378,
+    "connections": 369,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-06",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro",
+        "title": "Part-Time Experience",
+        "duration": {
+          "start": "2025-04",
+          "end": "2025-07",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Part-Time Experience",
+        "title": "Quality Assurance Engineer",
+        "duration": {
+          "start": "2025-04",
+          "end": "2025-07",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Quality Assurance Engineer",
+        "title": "Full Stack Engineer",
+        "duration": {
+          "start": "2025-01",
+          "end": "2025-04",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Gowri Software Solutions Pvt Ltd",
+        "title": "Quality Assurance Intern",
+        "duration": {
+          "start": "2024-09",
+          "end": "2024-10",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Gowri Software Solutions Pvt Ltd",
+        "title": "Development Intern",
+        "duration": {
+          "start": "2024-09",
+          "end": "2024-10",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Presidency University Bangalore",
+        "degree": "Bachelor of Technology - BTech",
+        "field_of_study": "Computer Science",
+        "dates": "Aug 2021 – Jul 2025",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Defect Tracking",
+      "Exploratory Testing"
+    ],
+    "relationship_evidence": {
+      "same_company": true,
+      "same_location": true,
+      "same_school": false,
+      "same_department": false,
+      "department_similarity": 0,
+      "years_at_company": 1.1,
+      "current_employee": true
+    },
+    "relationship_summary": [
+      "Works at Indpro AB",
+      "Based in Greater Bengaluru Area",
+      "QA role"
+    ],
+    "role": "QA",
+    "seniority": "Mid",
+    "decision_power": "Low",
+    "hiring_influence": "Low"
+  },
+  {
+    "name": "Uttam kumar Maharana",
+    "linkedin_url": "https://www.linkedin.com/in/uttamkumar-dev/",
+    "headline": "Full Stack Developer | MEAN MERN Specialist | Experienced in MongoDB, PostgreSQL, MySQL, Redux",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a Full Stack Developer with experience as a Programmer Analyst, I bring a unique perspective to building robust and scalable web applications. I have hands-on experience with the MERN stack (MongoDB, Express.js, React.js, Node.js) and other technologies like PostgreSQL, MySQL, Prisma, and Redux for state management. My work spans from developing online surveys with Sawtooth (SSI Web) to building personal projects, including interactive quiz platforms, social media platforms and inventory management tools. Top skillsFull Stack Development (MERN) • Databases: MongoDB, PostgreSQL, MySQL • ORMs: Mongoose, Prisma • State Management: Redux • API Development & Integration",
+    "current_company": "Indpro AB",
+    "position": "Full Stack Developer",
+    "followers": 208,
+    "connections": 206,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-04",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Techsaint Technology Solutions Pvt.Ltd.",
+        "title": "Full Stack Developer",
+        "duration": {
+          "start": "2024-11",
+          "end": "2025-03",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Institute of Management & Information Technology, Cuttack",
+        "degree": "Master's degree",
+        "field_of_study": "Computer Engineering",
+        "dates": "2020 – 2022",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Angular",
+      "Ionic Framework"
+    ],
+    "relationship_evidence": {
+      "same_company": true,
+      "same_location": true,
+      "same_school": false,
+      "same_department": false,
+      "department_similarity": 0,
+      "years_at_company": 1.3,
+      "current_employee": true
+    },
+    "relationship_summary": [
+      "Works at Indpro AB",
+      "Based in Bengaluru",
+      "Engineering role"
+    ],
+    "role": "Engineering",
+    "seniority": "Mid",
+    "decision_power": "Low",
+    "hiring_influence": "Low"
+  }
+]

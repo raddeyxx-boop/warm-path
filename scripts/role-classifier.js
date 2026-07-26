@@ -697,6 +697,10 @@ async function runCli() {
     const {
         writeJsonAtomicSync
     } = require("../utils/JsonFileStore");
+    const {
+        serializeFinalProfiles,
+        validateClassifiedCandidates
+    } = require("../utils/FinalProfileSerializer");
     const inputPath = path.resolve(process.argv[2] || path.join("data", "mutual-details.json"));
     const outputPath = path.resolve(process.argv[3] || path.join("data", "mutual-details-classified.json"));
 
@@ -705,8 +709,9 @@ async function runCli() {
     }
 
     const profiles = JSON.parse(fs.readFileSync(inputPath, "utf8"));
-    const classified = classifyProfiles(profiles);
+    const classified = serializeFinalProfiles(classifyProfiles(profiles));
 
+    validateClassifiedCandidates(classified);
     writeJsonAtomicSync(outputPath, classified);
     console.log("Classified " + classified.length + " profile(s).");
     console.log("Saved: " + path.relative(process.cwd(), outputPath));

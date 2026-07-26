@@ -1,0 +1,109 @@
+[
+  {
+    "name": "Jnanesha V G",
+    "linkedin_url": "https://www.linkedin.com/in/jnanesha-v-g/",
+    "headline": "Accounts executive at Indpro",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "I have 7 years of experience in accounting, GST filling,PT filling, TDS filling, and payroll activities like salary preparation and IT declaration works, calculation of tax and issuing Form 16, and monthly MIS report preparation and presentation to management. Top skillsPayroll • Auditing",
+    "current_company": "Indpro",
+    "position": "Accounts executive",
+    "followers": 87,
+    "connections": 83,
+    "experience": [
+      {
+        "company": "Charted Accountant Consulting Firm",
+        "title": "Accountant",
+        "duration": {
+          "start": "2016-08",
+          "end": "2019-02",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Bangalore University",
+        "degree": "Bachelor of Commerce - BCom",
+        "field_of_study": "Accounting and Finance",
+        "dates": "2013 – 2016",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Personal Income Tax Returns",
+      "Tds"
+    ]
+  },
+  {
+    "name": "Dhaya Duraisamy",
+    "linkedin_url": "https://www.linkedin.com/in/dhaya-duraisamy-52644524/",
+    "headline": "Team lead at Indpro AB | Mobile app development - iOS, Android, React-Native | Front-end development - React.js, Angular, Javascript.",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Mobile application developer with 8+ years of experience, primarily in iOS. Frontend developer with 1+ years of experience in React.js and Angular. Seeking a challenging environment gives continuous learning, creativity, and exposure to advanced technology that provides personal and professional growth. SKILLS: Swift, Objective C, Kotlin, iOS, Android. HTML, CSS, Javascript, Typescript, React.js, Angular. Cocca touch, CocoaPods. Database: SQLite & Core data. Architecture: MVC, MVVM. Authentication: ForgeRock, Azure & Local Authentication. APNs, FCMBeacons (Bluetooth Low Energy) DeviceSignalr, Multipeer Connectivity (Bluetooth & wifi)JIRA, Firebase, Fabric, Hockey app. Version Handling: GITTop skillsiOS Development • Android Development • React.js • Angular • JavaScript",
+    "current_company": "Indpro AB",
+    "position": "Team lead",
+    "followers": 575,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Mobile Application Developer",
+        "duration": {
+          "start": "2018-10",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Indpro AB",
+        "title": "iOS App Developer",
+        "duration": {
+          "start": "2014-10",
+          "end": "2018-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "ctsIT.com",
+        "title": "Senior Software Engineer",
+        "duration": {
+          "start": "2013-12",
+          "end": "2014-09",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Yakshna Technologies",
+        "title": "Technical Consultant",
+        "duration": {
+          "start": "2010-07",
+          "end": "2013-11",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Annai Mathammal Sheela Engineering College",
+        "degree": "Bachelor of Engineering - BE",
+        "field_of_study": "Electrical and Electronics Engineering",
+        "dates": "2006 – 2010",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Bharathiar University",
+        "degree": "Master of Business Administration (MBA)",
+        "field_of_study": "Human Resources Management and Services",
+        "dates": "2012 – 2014",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "iOS Development",
+      "Android Development"
+    ]
+  }
+]

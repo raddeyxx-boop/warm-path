@@ -24,4 +24,17 @@ function createUserSupabaseClient(accessToken) {
     });
 }
 
-module.exports = { createUserSupabaseClient };
+function createServiceSupabaseClient() {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) {
+        const error = new Error("Server recovery requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
+        error.code = "SUPABASE_RECOVERY_CONFIG_MISSING";
+        throw error;
+    }
+    return createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    });
+}
+
+module.exports = { createServiceSupabaseClient, createUserSupabaseClient };

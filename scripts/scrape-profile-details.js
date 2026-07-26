@@ -1,6 +1,7 @@
 const fs = require("fs/promises");
 const path = require("path");
 const startBrowser = require("../services/browser");
+const { resilientClick } = require("../services/playwright-actions");
 const {
     extractHeader,
     extractName,
@@ -52,6 +53,24 @@ const LINKEDIN_HOME_URL = "https://www.linkedin.com/feed/";
 const DATA_DIR = path.resolve(process.env.WARM_PATH_RUN_DIR || path.join(__dirname, "..", "data"));
 const MUTUALS_PATH = path.join(DATA_DIR, "mutuals.json");
 const OUTPUT_PATH = path.join(DATA_DIR, "mutual-details.json");
+const FAILURES_PATH = path.join(DATA_DIR, "mutual-failures.json");
+
+let cancellationRequested = false;
+
+class ScrapeCancellationError extends Error {
+    constructor(stage, code = "USER_CANCELLED") {
+        super(`Scraping stopped during ${stage}.`);
+        this.name = "ScrapeCancellationError";
+        this.code = code;
+    }
+}
+
+function assertPageUsable(page, stage) {
+    if (cancellationRequested) throw new ScrapeCancellationError(stage);
+    if (!page || page.isClosed()) throw new ScrapeCancellationError(stage, "PAGE_CLOSED");
+    const browser = page.context()?.browser();
+    if (!browser?.isConnected()) throw new ScrapeCancellationError(stage, "PAGE_CLOSED");
+}
 const TARGET_PATH = path.join(DATA_DIR, "target.json");
 
 const TIMEOUTS = {
@@ -249,7 +268,12 @@ async function extractConnectionStatus(page) {
             if (await check.locator.count()) {
                 return check.label;
             }
-        } catch (err) {}
+        } catch (err) {
+            console.log("[scrape-profile-details.js:readConnectionStatus] Status probe failed; trying next marker.", {
+                marker: check.label,
+                reason: err.message
+            });
+        }
     }
 
     return "Unknown";
@@ -348,6 +372,7 @@ function normalizeProfileForJson(profile = {}) {
         headline: profile.headline,
         location: profile.location,
         about: profile.about,
+        company: profile.company,
         current_company: profile.current_company,
         position: profile.position,
         followers: normalizeNumericField(profile.followers),
@@ -355,6 +380,7 @@ function normalizeProfileForJson(profile = {}) {
         experience: Array.isArray(profile.experience) ? profile.experience : [],
         education: Array.isArray(profile.education) ? profile.education : [],
         skills: Array.isArray(profile.skills) ? profile.skills : [],
+        technologies: Array.isArray(profile.technologies) ? profile.technologies : [],
         relationship_evidence: profile.relationship_evidence,
         role: profile.role,
         seniority: profile.seniority,
@@ -421,14 +447,12 @@ async function moveMouseToLocator(page, locator, label) {
 
 async function naturalClick(page, locator, label) {
     await moveMouseToLocator(page, locator, label);
-    await locator.hover({
-        timeout: TIMEOUTS.contentMs
-    }).catch(() => {});
-    await pause(page, 300, 800);
-
-    await locator.click({
+    return resilientClick(locator, {
+        context: `scrape-profile-details.naturalClick:${label}`,
+        page,
         delay: randomInt(70, 180),
-        timeout: TIMEOUTS.contentMs
+        timeout: TIMEOUTS.contentMs,
+        pauseBeforeClick: () => pause(page, 300, 800)
     });
 }
 
@@ -635,16 +659,23 @@ async function prepareForMutualSearch(page) {
 }
 
 async function runProfileSearch(page, mutualProfile, strategy = null) {
-    const searchBox = page.locator(SELECTORS.searchInput).first();
+    let searchBox = page.locator(SELECTORS.searchInput).first();
     const searchStrategy = strategy || chooseSearchStrategy(
         mutualProfile.name,
         HUMAN_BEHAVIOR_CONFIG
     );
 
     if (!(await searchBox.isVisible({ timeout: 3000 }).catch(() => false))) {
-        console.log("Warning: search box not visible. Recovering via LinkedIn Home.");
-        await openLinkedInHome(page);
+        await page.keyboard.press("Escape").catch(() => {});
+        await pause(page, 500, 1100);
+        searchBox = page.locator(SELECTORS.searchInput).first();
+        if (!(await searchBox.isVisible({ timeout: 3000 }).catch(() => false))) {
+            throw new Error("LinkedIn global search box is unavailable on the current page.");
+        }
     }
+
+    await searchBox.waitFor({ state: "visible", timeout: TIMEOUTS.searchBoxMs });
+    console.log("Global search box visible.");
 
     await prepareForMutualSearch(page);
     console.log("Strategy selected:");
@@ -657,7 +688,17 @@ async function runProfileSearch(page, mutualProfile, strategy = null) {
     await pause(page, 180, 420);
     await page.keyboard.press("Backspace");
     await pause(page, 220, 520);
+    const valueAfterClear = cleanText(await searchBox.inputValue().catch(() => ""));
+    if (valueAfterClear) {
+        throw new Error(`Global search box did not clear. Current value: "${valueAfterClear}".`);
+    }
+    console.log("Global search box cleared.");
     await typeLikeHuman(page, searchStrategy.query);
+    const typedValue = cleanText(await searchBox.inputValue().catch(() => ""));
+    if (typedValue.toLowerCase() !== cleanText(searchStrategy.query).toLowerCase()) {
+        throw new Error(`Search input mismatch. Expected "${searchStrategy.query}" but found "${typedValue}".`);
+    }
+    console.log("Search input verified:", typedValue);
     await pause(page, 1000, 2000);
 
     const suggestions = page.locator(SELECTORS.searchSuggestions);
@@ -679,7 +720,7 @@ async function runProfileSearch(page, mutualProfile, strategy = null) {
     );
     await page.waitForTimeout(suggestionDelay);
     await moveMouseSlightly(page);
-    console.log("Suggestions loaded...");
+    console.log("Suggestions loaded for:", mutualProfile.name);
     console.log("Reading search suggestions...");
     await pause(page, 1500, 2200);
 
@@ -1049,6 +1090,7 @@ function shouldArriveAtBottom(session) {
 }
 
 async function boundedPause(page, session, minMs, maxMs) {
+    assertPageUsable(page, "human reading pause");
     const remainingMs = remainingProfileReadMs(session);
 
     if (remainingMs <= 0) {
@@ -1058,9 +1100,7 @@ async function boundedPause(page, session, minMs, maxMs) {
     await page.waitForTimeout(Math.min(
         remainingMs,
         randomInt(minMs, maxMs)
-    )).catch(err => {
-        console.log("Human reading pause skipped:", err.message);
-    });
+    ));
 }
 
 async function moveMouseNaturally(page) {
@@ -1163,10 +1203,12 @@ async function hoverProfileAmbientElement(page) {
         "main section"
     ];
     const selector = selectors[randomInt(0, selectors.length - 1)];
-    const candidates = await page.locator(selector).elementHandles().catch(() => []);
-    const shuffled = candidates.sort(() => Math.random() - 0.5).slice(0, 5);
+    const candidates = page.locator(selector);
+    const indices = Array.from({ length: Math.min(await candidates.count().catch(() => 0), 10) }, (_, index) => index)
+        .sort(() => Math.random() - 0.5).slice(0, 5);
 
-    for (const candidate of shuffled) {
+    for (const index of indices) {
+        const candidate = candidates.nth(index);
         const box = await candidate.boundingBox().catch(() => null);
 
         if (!box || box.width < 20 || box.height < 20) {
@@ -1185,19 +1227,19 @@ async function pauseForNewProfileSections(page, session, previousSeen, state) {
     const pauses = [];
 
     if (!previousSeen.about && state.hasAbout) {
-        pauses.push(["About", 4000, 8000]);
+        pauses.push(["About", 2500, 5000]);
     }
 
     if (!previousSeen.experience && state.hasExperience) {
-        pauses.push(["Experience", 5000, 10000]);
+        pauses.push(["Experience", 2500, 4500]);
     }
 
     if (!previousSeen.education && state.hasEducation) {
-        pauses.push(["Education", 3000, 6000]);
+        pauses.push(["Education", 2000, 4000]);
     }
 
     if (!previousSeen.skills && state.hasSkills) {
-        pauses.push(["Skills", 2000, 4000]);
+        pauses.push(["Skills", 1500, 3000]);
     }
 
     for (const [label, minMs, maxMs] of pauses) {
@@ -1276,11 +1318,225 @@ async function detectProfileSections(page) {
     return await getProfileRenderState(page);
 }
 
+async function smoothMutualScroll(page, distance) {
+    await page.evaluate(deltaY => {
+        const visibleArea = element => {
+            if (element === document.documentElement || element === document.body) {
+                return window.innerWidth * window.innerHeight;
+            }
+            const box = element.getBoundingClientRect();
+            return Math.max(0, Math.min(box.right, window.innerWidth) - Math.max(box.left, 0)) *
+                Math.max(0, Math.min(box.bottom, window.innerHeight) - Math.max(box.top, 0));
+        };
+        const candidates = [
+            document.scrollingElement,
+            document.documentElement,
+            document.body,
+            ...document.querySelectorAll("main, main *, div, section")
+        ].filter(element => element && element.scrollHeight > element.clientHeight + 80)
+            .filter(element => visibleArea(element) > 20000)
+            .sort((left, right) => visibleArea(right) - visibleArea(left));
+        const target = candidates[0] || document.scrollingElement || document.documentElement;
+
+        target.scrollBy({ top: deltaY, behavior: "smooth" });
+    }, distance);
+    await pause(page, 280, 650);
+}
+
+async function visibleMutualSections(page) {
+    return page.evaluate(() => {
+        const clean = value => (value || "").replace(/\s+/g, " ").trim();
+        const patterns = [
+            ["About", /^About$/i],
+            ["Featured", /^Featured$/i],
+            ["Activity", /^(Activity|Recent activity)$/i],
+            ["Experience", /^Experience$/i],
+            ["Education", /^Education$/i],
+            ["Licenses", /^Licenses(?: & certifications)?$/i],
+            ["Skills", /^Skills(?:\s+\(\d+\))?$/i],
+            ["Recommendations", /^Recommendations$/i]
+        ];
+
+        return [...document.querySelectorAll("main section")].flatMap(section => {
+            const box = section.getBoundingClientRect();
+            if (box.bottom <= 0 || box.top >= window.innerHeight) return [];
+            const heading = clean(section.querySelector("h2, h3, [role='heading']")?.innerText);
+            const match = patterns.find(([, pattern]) => pattern.test(heading));
+            return match ? [match[0]] : [];
+        });
+    }).catch(() => []);
+}
+
+async function pauseAtMutualSections(page, direction, loggedSections) {
+    const sections = await visibleMutualSections(page);
+
+    for (const section of sections) {
+        const key = `${direction}:${section}`;
+        if (loggedSections.has(key)) continue;
+        loggedSections.add(key);
+        const prefix = direction === "up" ? "Returning through" : "Reading";
+        console.log(`[MUTUAL] ${prefix} ${section}`);
+        const isLongRead = section === "About" || section === "Experience";
+        await pause(page, isLongRead ? 1800 : 800, isLongRead ? 3800 : 2200);
+    }
+}
+
+async function humanReadMutualProfile(page) {
+    assertPageUsable(page, "mutual profile reading");
+    console.log("[MUTUAL] Profile loaded");
+    const loggedSections = new Set();
+    let state = await detectProfileSections(page);
+
+    while (state.scrollY > 20) {
+        await smoothMutualScroll(page, -randomInt(280, 620));
+        state = await detectProfileSections(page);
+    }
+
+    console.log("[MUTUAL] Starting downward reading");
+    await pause(page, 1200, 2800);
+    let stableBottomCount = 0;
+    let previousHeight = 0;
+
+    for (let step = 1; step <= 80 && stableBottomCount < 3; step += 1) {
+        assertPageUsable(page, "mutual downward scrolling");
+        await pauseAtMutualSections(page, "down", loggedSections);
+        const distance = randomInt(220, 760);
+        await smoothMutualScroll(page, distance);
+        if (Math.random() < 0.11) {
+            await smoothMutualScroll(page, -randomInt(45, 130));
+        }
+        await pause(page, 650, 1900);
+        if (step % randomInt(3, 5) === 0) await pause(page, 1200, 3000);
+
+        state = await detectProfileSections(page);
+        const heightStable = previousHeight > 0 && Math.abs(state.scrollHeight - previousHeight) < 40;
+        stableBottomCount = state.atBottom && heightStable ? stableBottomCount + 1 : 0;
+        previousHeight = state.scrollHeight;
+    }
+
+    if (stableBottomCount < 3) {
+        throw new Error("Mutual profile bottom could not be confirmed.");
+    }
+
+    console.log("[MUTUAL] Bottom reached");
+    await pause(page, 1800, 4200);
+    console.log("[MUTUAL] Starting upward reading");
+
+    for (let step = 1; step <= 80; step += 1) {
+        assertPageUsable(page, "mutual upward scrolling");
+        await pauseAtMutualSections(page, "up", loggedSections);
+        state = await detectProfileSections(page);
+        if (state.scrollY <= 20) break;
+        await smoothMutualScroll(page, -randomInt(220, 720));
+        if (Math.random() < 0.10) {
+            await smoothMutualScroll(page, randomInt(40, 110));
+        }
+        await pause(page, 600, 1700);
+        if (step % randomInt(3, 5) === 0) await pause(page, 1000, 2600);
+    }
+
+    state = await detectProfileSections(page);
+    if (state.scrollY > 20) {
+        throw new Error(`Mutual profile did not return to the top (scrollY=${state.scrollY}).`);
+    }
+
+    console.log("[MUTUAL] Top reached");
+    await pause(page, 1000, 2400);
+    console.log("[MUTUAL] Human reading completed");
+    return state;
+}
+
+async function pauseAtTargetSections(page, direction, loggedSections) {
+    const sections = await visibleMutualSections(page);
+
+    for (const section of sections) {
+        const key = `${direction}:${section}`;
+        if (loggedSections.has(key)) continue;
+        loggedSections.add(key);
+        const prefix = direction === "up" ? "Returning through" : "Reading";
+        console.log(`[TARGET] ${prefix} ${section}`);
+        const isLongRead = section === "About" || section === "Experience";
+        await pause(page, isLongRead ? 1800 : 800, isLongRead ? 3800 : 2200);
+    }
+}
+
+async function humanReadTargetProfile(page) {
+    assertPageUsable(page, "target profile reading");
+    console.log("[TARGET] Profile fully loaded");
+    console.log("[TARGET] Reading profile header");
+    const loggedSections = new Set();
+    let state = await detectProfileSections(page);
+
+    // A restored browser session may retain a scroll offset. Return naturally
+    // before beginning the required top-to-bottom target reading pass.
+    while (state.scrollY > 20) {
+        await smoothMutualScroll(page, -randomInt(280, 620));
+        state = await detectProfileSections(page);
+    }
+
+    await pause(page, 1400, 3200);
+    console.log("[TARGET] Starting downward reading");
+    let stableBottomCount = 0;
+    let previousHeight = 0;
+
+    for (let step = 1; step <= 80 && stableBottomCount < 3; step += 1) {
+        assertPageUsable(page, "target downward scrolling");
+        await pauseAtTargetSections(page, "down", loggedSections);
+        await smoothMutualScroll(page, randomInt(220, 760));
+
+        if (Math.random() < 0.11) {
+            await smoothMutualScroll(page, -randomInt(45, 130));
+        }
+
+        await pause(page, 650, 1900);
+        if (step % randomInt(3, 5) === 0) await pause(page, 1200, 3000);
+
+        state = await detectProfileSections(page);
+        const heightStable = previousHeight > 0 && Math.abs(state.scrollHeight - previousHeight) < 40;
+        stableBottomCount = state.atBottom && heightStable ? stableBottomCount + 1 : 0;
+        previousHeight = state.scrollHeight;
+    }
+
+    if (stableBottomCount < 3) {
+        throw new Error("Target profile bottom could not be confirmed.");
+    }
+
+    console.log("[TARGET] Bottom reached");
+    await pause(page, 1800, 4200);
+    console.log("[TARGET] Starting upward reading");
+
+    for (let step = 1; step <= 80; step += 1) {
+        assertPageUsable(page, "target upward scrolling");
+        await pauseAtTargetSections(page, "up", loggedSections);
+        state = await detectProfileSections(page);
+        if (state.scrollY <= 20) break;
+
+        await smoothMutualScroll(page, -randomInt(220, 720));
+        if (Math.random() < 0.10) {
+            await smoothMutualScroll(page, randomInt(40, 110));
+        }
+
+        await pause(page, 600, 1700);
+        if (step % randomInt(3, 5) === 0) await pause(page, 1000, 2600);
+    }
+
+    state = await detectProfileSections(page);
+    if (state.scrollY > 20) {
+        throw new Error(`Target profile did not return to the top (scrollY=${state.scrollY}).`);
+    }
+
+    console.log("[TARGET] Top reached");
+    await pause(page, 1000, 2400);
+    console.log("[TARGET] Human reading completed");
+    return state;
+}
+
 // LinkedIn profile pages are React-rendered and inject lower sections lazily.
 // Read naturally and stop as soon as About, Experience, Education, and Skills
 // are available. Do not keep scrolling simply to satisfy a timer.
 async function humanReadProfile(page) {
     console.log("Reading profile");
+    assertPageUsable(page, "profile reading");
 
     const session = createReadSession();
     let latestState = await detectProfileSections(page);
@@ -1297,6 +1553,7 @@ async function humanReadProfile(page) {
     await readCurrentViewport(page, session);
 
     while (shouldContinueReading(session)) {
+        assertPageUsable(page, "profile scrolling");
         const previousSeen = { ...session.seen };
         await performHumanScroll(page, session, latestState);
         latestState = await detectProfileSections(page);
@@ -1603,7 +1860,8 @@ function validateProfileExtraction(profile, header) {
     return warnings;
 }
 
-async function scrapeProfile(page) {
+async function scrapeProfile(page, options = {}) {
+    assertPageUsable(page, "profile extraction");
     page.setDefaultTimeout(TIMEOUTS.profileMs);
     page.setDefaultNavigationTimeout(TIMEOUTS.pageLoadMs);
 
@@ -1617,7 +1875,11 @@ async function scrapeProfile(page) {
 
     await waitForProfileContent(page);
     await pause(page, 2500, 5000);
-    const renderState = await humanReadProfile(page);
+    const renderState = options.targetProfile
+        ? await humanReadTargetProfile(page)
+        : options.mutualProfile
+            ? await humanReadMutualProfile(page)
+            : await humanReadProfile(page);
     const settledState = await finishProfileRendering(page, renderState);
 
     const currentUrl = page.url();
@@ -1639,17 +1901,16 @@ async function scrapeProfile(page) {
         extractEducation(page),
         extractSkills(page)
     ]);
+    assertPageUsable(page, "section extraction");
     const retriedSections = await retryEmptySections(page, {
         experience: initialExperience,
         education: initialEducation,
         skills: initialSkills
     }, settledState);
-    const fullExperience = await extractExperienceSection(page, {
-        includeDetails: true,
-        initialExperience: retriedSections.experience
-    });
+    // Mutual profiles are read passively. Never open LinkedIn's Experience
+    // detail page or press section buttons during extraction.
     const experience = normalizeExperienceDurations(ensureCurrentExperienceMatchesHeader(
-        fullExperience,
+        retriedSections.experience,
         header
     ));
     const education = retriedSections.education;
@@ -1680,97 +1941,95 @@ async function scrapeProfile(page) {
 
 async function findAndOpenProfile(page, mutualProfile, searchState = {}) {
     const expectedUrl = normalizeProfileUrl(mutualProfile.linkedin_url);
+    const cleanMutualName = cleanText(mutualProfile.name)
+        .replace(/\s*•\s*(1st|2nd|3rd).*$/i, "")
+        .replace(/\bis open to work\b/gi, "")
+        .replace(/\b(Connect|Follow|Pending)\b.*$/i, "")
+        .replace(/\bmutual connection\b.*$/i, "")
+        .replace(/\b\d[\d,]*\s+followers?\b.*$/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!cleanMutualName || cleanMutualName.length > 120 ||
+        /mutual connection|followers?|\b(?:connect|follow|pending)\b/i.test(cleanMutualName)) {
+        throw new Error(`Malformed mutual name rejected before search: "${mutualProfile.name}".`);
+    }
+
+    const searchableProfile = { ...mutualProfile, name: cleanMutualName };
     let lastError;
-    const randomizedStrategy = chooseSearchStrategy(
-        mutualProfile.name,
-        HUMAN_BEHAVIOR_CONFIG,
-        {
-            avoidType: searchState.previousStrategyType
+
+    assertPageUsable(page, "mutual search");
+    const currentSearchBox = page.locator(SELECTORS.searchInput).first();
+    const searchBoxVisible = await currentSearchBox.isVisible({ timeout: 1500 }).catch(() => false);
+    if (!searchBoxVisible) {
+        await page.keyboard.press("Escape").catch(() => {});
+        await pause(page, 500, 1100);
+        if (!(await currentSearchBox.isVisible({ timeout: 3000 }).catch(() => false))) {
+            throw new Error("LinkedIn global search box is unavailable on the current profile.");
         }
+    } else {
+        console.log("Preparing next mutual from current profile:", {
+            candidate_name: cleanMutualName,
+            current_url: page.url()
+        });
+    }
+
+    const randomizedStrategy = chooseSearchStrategy(
+        cleanMutualName,
+        HUMAN_BEHAVIOR_CONFIG,
+        { avoidType: searchState.previousStrategyType }
     );
 
     searchState.previousStrategyType = randomizedStrategy.type;
+    searchState.searchAttemptCount = (searchState.searchAttemptCount || 0) + 1;
+    console.log(searchState.searchAttemptCount === 1
+        ? `[MUTUAL] Searching first mutual: ${cleanMutualName}`
+        : `[MUTUAL] Searching next mutual from current profile: ${cleanMutualName}`);
 
     for (let attempt = 1; attempt <= 2; attempt++) {
         const strategy = attempt === 1
             ? randomizedStrategy
-            : fullNameSearchStrategy(mutualProfile.name);
+            : fullNameSearchStrategy(cleanMutualName);
 
         try {
-            if (attempt === 2) {
-                console.log("Retrying with Full name...");
-            }
-
-            const searchResult = await runProfileSearch(page, mutualProfile, strategy);
+            if (attempt === 2) console.log("Retrying mutual search with full name...");
+            console.log("Searching mutual...");
+            const searchResult = await runProfileSearch(
+                page,
+                searchableProfile,
+                strategy
+            );
+            console.log(`Typed: "${cleanMutualName}"`);
             const match = await findBestVerifiedSuggestion(
                 page,
                 searchResult.suggestions,
-                mutualProfile
+                searchableProfile
             );
 
-            if (match && match.verification.verified) {
-                console.log("Profile verified.");
-                await openVerifiedProfile(page, match.suggestion, expectedUrl);
-                return;
+            if (!match?.verification?.verified) {
+                throw new Error(`No verified search suggestion found for "${cleanMutualName}".`);
             }
 
-            console.log("Verification failed.");
-            throw new Error(
-                'Could not find "' +
-                mutualProfile.name +
-                '" in search suggestions above the verification threshold.'
-            );
+            console.log("Mutual profile verified. Opening search suggestion...");
+            await openVerifiedProfile(page, match.suggestion, expectedUrl);
+            if (normalizeProfileUrl(page.url()) !== expectedUrl) {
+                throw new Error("Verified search suggestion opened a different LinkedIn profile.");
+            }
+            return { fallbackUsed: false, navigationMethod: "verified_search" };
         } catch (err) {
             lastError = err;
+            if (attempt >= 2) break;
 
-            if (attempt >= 2) {
-                break;
-            }
-
-            console.log("Retry: search attempt failed. Returning to LinkedIn Home:", err.message);
-            await openLinkedInHome(page);
-            await pause(page, 450, 900);
+            console.log("Mutual search attempt failed:", err.message);
+            console.log("Retrying mutual search from the current page...");
+            await pause(page, 900, 1800);
         }
     }
 
-    console.log("Search suggestions failed. Trying direct profile URL fallback...");
-    await openProfileDirectly(page, expectedUrl);
-    console.log("Direct profile URL fallback succeeded.");
-}
-
-async function openProfileDirectly(page, expectedUrl) {
-    if (!expectedUrl) {
-        throw new Error("Direct profile fallback unavailable: expected URL is missing.");
-    }
-
-    await page.goto(expectedUrl, {
-        waitUntil: "domcontentloaded",
-        timeout: TIMEOUTS.pageLoadMs
-    });
-
-    await page.waitForURL(url => {
-        return normalizeProfileUrl(url.href) === expectedUrl ||
-            isUnexpectedLinkedInUrl(url.href);
-    }, {
-        timeout: TIMEOUTS.navigationMs
-    }).catch(() => {});
-
-    if (isUnexpectedLinkedInUrl(page.url())) {
-        throw new Error("LinkedIn redirected unexpectedly during direct profile fallback.");
-    }
-
-    const openedUrl = normalizeProfileUrl(page.url());
-
-    if (openedUrl !== expectedUrl) {
-        throw new Error(
-            "Direct profile fallback opened the wrong profile. Expected " +
-            expectedUrl +
-            " but opened " +
-            (openedUrl || page.url())
-        );
-    }
-
-    await waitForProfileContent(page);
+    throw new Error(
+        `Unable to open mutual "${cleanMutualName}" through verified LinkedIn search: ` +
+        (lastError?.message || "unknown search failure")
+    );
 }
 
 function profileMatchesTarget(profile, target) {
@@ -1842,6 +2101,16 @@ async function takeSessionBreak(page) {
             allowComments: true,
             allowInlineFeedCommenting: true
         }
+    );
+}
+
+async function takeMutualsPageBreak(page) {
+    console.log("Taking a human browsing break on the mutuals page...");
+    await moveMouseSlightly(page);
+    await pause(
+        page,
+        HUMAN_BEHAVIOR_CONFIG.minHomeBreakDurationMs,
+        HUMAN_BEHAVIOR_CONFIG.maxHomeBreakDurationMs
     );
 }
 
@@ -1921,11 +2190,12 @@ async function main() {
     let nextSessionBreak = Number.POSITIVE_INFINITY;
     let shuttingDown = false;
     let completedNormally = false;
+    let failures = [];
     const profileTimings = [];
     const searchState = {
-        previousStrategyType: null
+        previousStrategyType: null,
+        searchAttemptCount: 0
     };
-
     try {
         const mutualProfiles = await loadMutuals();
         const target = await readJsonFile(
@@ -1934,6 +2204,8 @@ async function main() {
         );
 
         results = await loadExistingResults();
+        failures = await readJsonFile(FAILURES_PATH, "", []).catch(() => []);
+        if (!Array.isArray(failures)) failures = [];
 
         const scrapedUrls = new Set(
             results.map(result => normalizeProfileUrl(result.linkedin_url))
@@ -1944,6 +2216,14 @@ async function main() {
         console.log("=================================");
         console.log("Profiles:", mutualProfiles.length);
         console.log("Already scraped:", scrapedUrls.size);
+        console.log("Failed previously:", failures.length);
+        console.log("Remaining:", mutualProfiles.filter(profile =>
+            !scrapedUrls.has(normalizeProfileUrl(profile.linkedin_url))
+        ).length);
+        const nextCandidate = mutualProfiles.find(profile =>
+            !scrapedUrls.has(normalizeProfileUrl(profile.linkedin_url))
+        );
+        console.log("Next candidate:", nextCandidate?.name || "None");
         console.log(
             "Human activity:",
             HUMAN_BEHAVIOR_CONFIG.enableHumanActivity ? "enabled" : "disabled"
@@ -1989,6 +2269,7 @@ async function main() {
         };
 
         const requestShutdown = (reason, exitCode = 1) => {
+            cancellationRequested = true;
             gracefulShutdown(reason, exitCode).catch(err => {
                 console.error("Shutdown failed:", err.message);
                 process.exit(exitCode);
@@ -2001,17 +2282,13 @@ async function main() {
         session.context.on("close", () => requestShutdown("Browser context closed.", 1));
         session.page.on("close", () => requestShutdown("Page closed.", 1));
 
+        console.log("[MUTUAL] Starting mutual processing session");
+        console.log("[MUTUAL] Browser launched");
+        console.log("[MUTUAL] Opening LinkedIn Home");
         await openLinkedInHome(session.page);
 
-        if (
-            HUMAN_BEHAVIOR_CONFIG.enableHumanActivity &&
-            HUMAN_BEHAVIOR_CONFIG.enableInitialHomeBrowsing
-        ) {
-            await performInitialHomeBrowsing(session.page);
-        }
-
         for (const [index, mutualProfile] of mutualProfiles.entries()) {
-            if (shuttingDown) {
+            if (shuttingDown || cancellationRequested) {
                 break;
             }
 
@@ -2023,14 +2300,24 @@ async function main() {
             }
 
             logProgress(index + 1, mutualProfiles.length, mutualProfile);
+            const previousCandidate = index > 0 ? mutualProfiles[index - 1] : null;
+            console.log("Candidate processing:", {
+                candidate_index: index + 1,
+                candidate_name: mutualProfile.name,
+                candidate_url: normalizedUrl,
+                previous_candidate_url: normalizeProfileUrl(previousCandidate?.linkedin_url)
+            });
             const profileStartedAt = Date.now();
 
             try {
                 const page = await ensureLivePage(session);
 
-                await findAndOpenProfile(page, mutualProfile, searchState);
+                console.log(`[MUTUALS] Opening mutual ${index + 1} of ${mutualProfiles.length}: ${mutualProfile.name}`);
+                const navigation = await findAndOpenProfile(page, mutualProfile, searchState);
+                console.log("Fallback used:", navigation.fallbackUsed);
 
-                const profile = await scrapeProfile(page);
+                console.log(`[MUTUAL] Reading profile: ${mutualProfile.name}`);
+                const profile = await scrapeProfile(page, { mutualProfile: true });
 
                 if (normalizeProfileUrl(profile.linkedin_url) !== normalizedUrl) {
                     throw new Error("Scraped profile URL did not match the requested profile.");
@@ -2044,25 +2331,31 @@ async function main() {
                     index < mutualProfiles.length - 1;
 
                 results.push(profile);
+                searchState.hasProcessedProfile = true;
                 scrapedUrls.add(normalizedUrl);
+                failures = failures.filter(failure =>
+                    normalizeProfileUrl(failure.linkedin_url) !== normalizedUrl
+                );
                 scrapedCount += 1;
                 const profileMs = Date.now() - profileStartedAt;
                 profileTimings.push(profileMs);
 
                 logExtractedProfile(profile);
                 await saveResults(results);
+                await writeJsonAtomic(FAILURES_PATH, failures);
                 console.log("Saved:", "data/mutual-details.json");
                 logProfileTiming(
                     profileMs,
                     profileTimings,
                     mutualProfiles.length - index - 1
                 );
+                console.log(`[MUTUALS] Profile extraction completed: ${mutualProfile.name}`);
 
                 if (!profileMatchesTarget(profile, target)) {
                     console.log("Warning: no company match.");
 
                     if (shouldTakeSessionBreak) {
-                        await takeSessionBreak(page);
+                        await takeMutualsPageBreak(page);
                         await resumeScraping(page);
                         processedSinceBreak = 0;
                         nextSessionBreak = scheduleNextSessionBreak();
@@ -2074,7 +2367,7 @@ async function main() {
                 }
 
                 if (shouldTakeSessionBreak) {
-                    await takeSessionBreak(page);
+                    await takeMutualsPageBreak(page);
                     await resumeScraping(page);
                     processedSinceBreak = 0;
                     nextSessionBreak = scheduleNextSessionBreak();
@@ -2082,30 +2375,43 @@ async function main() {
                     await waitBetweenProfiles(page);
                 }
             } catch (err) {
+                if (cancellationRequested || err instanceof ScrapeCancellationError) {
+                    console.log("Scraping cancellation acknowledged:", err.code || "USER_CANCELLED");
+                    break;
+                }
                 failedCount += 1;
                 console.error("Profile failed:", err.message);
+                const failedRecord = {
+                    name: mutualProfile.name,
+                    linkedin_url: normalizedUrl,
+                    reason: err.message,
+                    failed_at: new Date().toISOString()
+                };
+                failures = failures.filter(failure =>
+                    normalizeProfileUrl(failure.linkedin_url) !== normalizedUrl
+                );
+                failures.push(failedRecord);
+                await writeJsonAtomic(FAILURES_PATH, failures).catch(saveError => {
+                    console.error("Failure checkpoint save failed:", saveError.message);
+                });
 
                 if (shuttingDown) {
                     break;
                 }
 
-                try {
-                    await openLinkedInHome(await ensureLivePage(session));
-                } catch (recoveryErr) {
-                    console.error("Recovery failed:", recoveryErr.message);
-                }
+                console.log("[MUTUAL][RECOVERY] Continuing from the current page with the next mutual.");
+                await ensureLivePage(session).catch(recoveryErr => {
+                    console.error("[MUTUAL][RECOVERY] Current browser page is unavailable:", recoveryErr.message);
+                });
             }
         }
 
         completedNormally = true;
 
-        if (session && session.page && !session.page.isClosed()) {
-            await browseHomeFeedBeforeClose(session.page).catch(err => {
-                console.error("Final feed browse failed:", err.message);
-            });
-        }
+        console.log("[MUTUAL] Finished mutual processing");
 
         logSummary(startedAt, scrapedCount, failedCount);
+        console.log("[MUTUALS] Closing browser session");
     } catch (err) {
         console.error("");
         console.error("Scrape profile details failed");
@@ -2136,10 +2442,13 @@ module.exports = {
     loadMutuals,
     loadExistingResults,
     openLinkedInHome,
+    findAndOpenProfile,
     searchProfile,
     runProfileSearch,
     openVerifiedProfile,
     humanReadProfile,
+    humanReadMutualProfile,
+    humanReadTargetProfile,
     waitBetweenProfiles,
     browseHomeFeedBeforeClose,
     ensureCurrentExperienceMatchesHeader,

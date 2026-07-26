@@ -1,0 +1,1025 @@
+[
+  {
+    "updatedAt": "2026-07-22T10:53:55.665Z",
+    "createdAt": "2026-07-08T07:48:17.097Z",
+    "id": "gYWWTlAoBPAFJtTe",
+    "name": "Warm Path Finder",
+    "description": null,
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "warm-path",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          64,
+          0
+        ],
+        "id": "cd8da9bb-a061-4979-867d-f83e57abd65f",
+        "name": "Webhook",
+        "webhookId": "19722fdf-f5e9-42da-92c7-a317a8b2a1ce"
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $input.first().json;\n\n// Get webhook body\nconst body = input.body ?? input;\n\n// The fresh Playwright contract stores classified profiles here\nconst profiles = body.extraction?.candidates;\n\nif (!Array.isArray(profiles)) {\n\tthrow new Error(\n\t\t\"Expected body.extraction.candidates to be an array.\\n\\nReceived:\\n\" +\n\t\tJSON.stringify(body, null, 2)\n\t);\n}\n\nreturn profiles.map((profile, index) => ({\n\tjson: {\n\t\tprofile_id: index + 1,\n\t\ttarget: body.target,\n\t\t...profile,\n\t},\n}));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ],
+        "id": "9f731714-6afc-4ee5-b332-af1b6fb88f94",
+        "name": "Split Profiles"
+      },
+      {
+        "parameters": {
+          "jsCode": "function toNumber(value) {\n\tif (!value) return 0;\n\n\tconst text = String(value).trim();\n\n\tif (text.includes(\"500+\")) return 500;\n\n\tconst number = text.replace(/[^\\d]/g, \"\");\n\n\treturn number ? Number(number) : 0;\n}\n\nreturn $input.all().map(item => {\n\n\tconst p = item.json;\n\n\treturn {\n\t\tjson: {\n\n\t\t\t...p,\n\n\t\t\tname: (p.name || \"\").trim(),\n\n\t\t\theadline: (p.headline || \"\").trim(),\n\n\t\t\tlocation: (p.location || \"\").trim(),\n\n\t\t\tabout: (p.about || \"\").trim(),\n\n\t\t\tcurrent_company: (p.current_company || \"\").trim(),\n\n\t\t\tposition: (p.position || \"\").trim(),\n\n\t\t\tcompany: (p.company || \"\").trim(),\n\n\t\t\tcollege: (p.college || \"\").trim(),\n\n\t\t\tfollowers: toNumber(p.followers),\n\n\t\t\tconnections: toNumber(p.connections),\n\n\t\t\texperience: Array.isArray(p.experience)\n\t\t\t\t? p.experience\n\t\t\t\t: [],\n\n\t\t\teducation: Array.isArray(p.education)\n\t\t\t\t? p.education\n\t\t\t\t: [],\n\n\t\t\tskills: Array.isArray(p.skills)\n\t\t\t\t? p.skills\n\t\t\t\t: []\n\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          400,
+          0
+        ],
+        "id": "12880c28-5ab3-4a99-81d8-3a91488a9ef6",
+        "name": "Normalize Data"
+      },
+      {
+        "parameters": {
+          "jsCode": "const TECH_KEYWORDS = [\n\t\"javascript\",\n\t\"typescript\",\n\t\"react\",\n\t\"angular\",\n\t\"vue\",\n\t\"node\",\n\t\"python\",\n\t\"java\",\n\t\"c#\",\n\t\".net\",\n\t\"aws\",\n\t\"azure\",\n\t\"gcp\",\n\t\"docker\",\n\t\"kubernetes\",\n\t\"sql\",\n\t\"mongodb\",\n\t\"postgresql\"\n];\n\nreturn $input.all().map(item => {\n\n\tconst p = item.json;\n\n\tconst text = [\n\t\tp.headline,\n\t\tp.about,\n\t\t...(p.skills || [])\n\t]\n\t.join(\" \")\n\t.toLowerCase();\n\n\tconst detectedSkills = TECH_KEYWORDS.filter(skill =>\n\t\ttext.includes(skill)\n\t);\n\n\treturn {\n\t\tjson: {\n\n\t\t\t...p,\n\n\t\t\ttext,\n\n\t\t\tdetected_skills: detectedSkills,\n\n\t\t\texperience_count: p.experience.length,\n\n\t\t\teducation_count: p.education.length,\n\n\t\t\tskill_count: p.skills.length,\n\n\t\t\thas_about: p.about.length > 0,\n\n\t\t\thas_location: p.location.length > 0,\n\n\t\t\thas_company: p.current_company.length > 0\n\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          544,
+          0
+        ],
+        "id": "a7bb6148-1a43-4f49-bce0-1610901a9b64",
+        "name": "Extract Features"
+      },
+      {
+        "parameters": {
+          "jsCode": "/**\n * ==========================================================\n * Warm Path Finder\n * Seniority Engine v2\n * ----------------------------------------------------------\n * Purpose:\n * Determine professional seniority using:\n * - Role\n * - Headline\n * - Position\n *\n * Outputs:\n * seniority\n * seniority_score\n * confidence\n * classification_reason\n * ==========================================================\n */\n\nfunction contains(text, keywords) {\n\treturn keywords.some(keyword => text.includes(keyword));\n}\n\nreturn $input.all().map(item => {\n\n\tconst role = (item.json.role || \"Other\").toLowerCase();\n\n\tconst text = [\n\t\titem.json.headline || \"\",\n\t\titem.json.position || \"\"\n\t]\n\t.join(\" \")\n\t.toLowerCase();\n\n\tlet seniority = \"Mid\";\n\tlet seniority_score = 40;\n\tlet confidence = 0.60;\n\tlet classification_reason = \"Default classification\";\n\n\t/* ======================================================\n\t   UNIVERSAL\n\t====================================================== */\n\n\tif (contains(text, [\"intern\", \"internship\", \"trainee\"])) {\n\t\tseniority = \"Intern\";\n\t\tseniority_score = 10;\n\t\tconfidence = 0.99;\n\t\tclassification_reason = \"Intern keyword detected\";\n\t}\n\n\telse if (contains(text, [\"junior\", \"jr.\"])) {\n\t\tseniority = \"Junior\";\n\t\tseniority_score = 20;\n\t\tconfidence = 0.98;\n\t\tclassification_reason = \"Junior keyword detected\";\n\t}\n\n\t/* ======================================================\n\t   ENGINEERING\n\t====================================================== */\n\n\telse if (role === \"engineering\") {\n\n\t\tif (contains(text, [\"principal engineer\", \"staff engineer\"])) {\n\t\t\tseniority = \"Lead\";\n\t\t\tseniority_score = 75;\n\t\t\tconfidence = 0.95;\n\t\t\tclassification_reason = \"Principal/Staff Engineer\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"technical lead\",\n\t\t\t\"tech lead\",\n\t\t\t\"team lead\",\n\t\t\t\"lead engineer\",\n\t\t\t\"lead developer\"\n\t\t])) {\n\t\t\tseniority = \"Lead\";\n\t\t\tseniority_score = 70;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Engineering Lead\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"engineering manager\",\n\t\t\t\"development manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Engineering Manager\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"senior software engineer\",\n\t\t\t\"senior developer\",\n\t\t\t\"senior engineer\",\n\t\t\t\"sr.\"\n\t\t])) {\n\t\t\tseniority = \"Senior\";\n\t\t\tseniority_score = 60;\n\t\t\tconfidence = 0.95;\n\t\t\tclassification_reason = \"Senior Engineer\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.85;\n\t\t\tclassification_reason = \"Engineering default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   HR\n\t====================================================== */\n\n\telse if (role === \"hr\") {\n\n\t\tif (contains(text, [\n\t\t\t\"director\",\n\t\t\t\"head of hr\",\n\t\t\t\"head of people\"\n\t\t])) {\n\t\t\tseniority = \"Director\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"HR Director\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"hr manager\",\n\t\t\t\"human resources manager\",\n\t\t\t\"people manager\",\n\t\t\t\"talent manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"HR Manager\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"executive\",\n\t\t\t\"specialist\",\n\t\t\t\"generalist\",\n\t\t\t\"recruiter\",\n\t\t\t\"talent acquisition\"\n\t\t])) {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.92;\n\t\t\tclassification_reason = \"HR Professional\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.75;\n\t\t\tclassification_reason = \"HR default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   QA\n\t====================================================== */\n\n\telse if (role === \"qa\") {\n\n\t\tif (contains(text, [\n\t\t\t\"qa manager\",\n\t\t\t\"test manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"QA Manager\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"lead qa\",\n\t\t\t\"qa lead\",\n\t\t\t\"test lead\"\n\t\t])) {\n\t\t\tseniority = \"Lead\";\n\t\t\tseniority_score = 70;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"QA Lead\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"senior qa\",\n\t\t\t\"senior test engineer\"\n\t\t])) {\n\t\t\tseniority = \"Senior\";\n\t\t\tseniority_score = 60;\n\t\t\tconfidence = 0.96;\n\t\t\tclassification_reason = \"Senior QA\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.85;\n\t\t\tclassification_reason = \"QA default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   BUSINESS DEVELOPMENT\n\t====================================================== */\n\n\telse if (role === \"business development\") {\n\n\t\tif (contains(text, [\n\t\t\t\"director\",\n\t\t\t\"head of sales\",\n\t\t\t\"head of business\"\n\t\t])) {\n\t\t\tseniority = \"Director\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Business Director\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"manager\",\n\t\t\t\"sales manager\"\n\t\t])) {\n\t\t\tseniority = \"Manager\";\n\t\t\tseniority_score = 80;\n\t\t\tconfidence = 0.97;\n\t\t\tclassification_reason = \"Business Manager\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Mid\";\n\t\t\tseniority_score = 40;\n\t\t\tconfidence = 0.85;\n\t\t\tclassification_reason = \"Business default\";\n\t\t}\n\n\t}\n\n\t/* ======================================================\n\t   EXECUTIVE\n\t====================================================== */\n\n\telse if (role === \"executive\") {\n\n\t\tif (contains(text, [\n\t\t\t\"founder\",\n\t\t\t\"co-founder\"\n\t\t])) {\n\t\t\tseniority = \"Founder\";\n\t\t\tseniority_score = 100;\n\t\t\tconfidence = 1.00;\n\t\t\tclassification_reason = \"Founder\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"ceo\",\n\t\t\t\"cto\",\n\t\t\t\"coo\",\n\t\t\t\"chief\"\n\t\t])) {\n\t\t\tseniority = \"Executive\";\n\t\t\tseniority_score = 95;\n\t\t\tconfidence = 0.99;\n\t\t\tclassification_reason = \"C-Level Executive\";\n\t\t}\n\n\t\telse if (contains(text, [\n\t\t\t\"director\",\n\t\t\t\"vice president\",\n\t\t\t\"vp\"\n\t\t])) {\n\t\t\tseniority = \"Director\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.98;\n\t\t\tclassification_reason = \"Director/VP\";\n\t\t}\n\n\t\telse {\n\t\t\tseniority = \"Executive\";\n\t\t\tseniority_score = 90;\n\t\t\tconfidence = 0.90;\n\t\t\tclassification_reason = \"Executive default\";\n\t\t}\n\n\t}\n\n\treturn {\n\t\tjson: {\n\t\t\t...item.json,\n\n\t\t\tseniority,\n\t\t\tseniority_score,\n\n\t\t\tconfidence,\n\n\t\t\tclassification_reason\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          688,
+          0
+        ],
+        "id": "9ac6bc9c-3906-4a33-81bf-a5c44ef43968",
+        "name": "Seniority Engine"
+      },
+      {
+        "parameters": {
+          "jsCode": "function contains(text, keywords) {\n\treturn keywords.some(keyword => text.includes(keyword));\n}\n\nreturn $input.all().map(item => {\n\n\tconst role = (item.json.role || \"\").toLowerCase();\n\n\tconst text = [\n\t\titem.json.headline || \"\",\n\t\titem.json.position || \"\"\n\t].join(\" \").toLowerCase();\n\n\tlet decision_power = \"Low\";\n\tlet decision_power_score = 20;\n\tlet decision_reason = \"Default\";\n\n\t/* ========= Highest Authority ========= */\n\n\tif (contains(text, [\n\t\t\"founder\",\n\t\t\"co-founder\",\n\t\t\"ceo\",\n\t\t\"cto\",\n\t\t\"coo\",\n\t\t\"chief\"\n\t])) {\n\n\t\tdecision_power = \"Very High\";\n\t\tdecision_power_score = 100;\n\t\tdecision_reason = \"C-Level / Founder\";\n\n\t}\n\n\t/* ========= Directors ========= */\n\n\telse if (contains(text, [\n\t\t\"director\",\n\t\t\"vice president\",\n\t\t\"vp\",\n\t\t\"head of\"\n\t])) {\n\n\t\tdecision_power = \"High\";\n\t\tdecision_power_score = 90;\n\t\tdecision_reason = \"Director / VP\";\n\n\t}\n\n\t/* ========= Managers ========= */\n\n\telse if (contains(text, [\n\t\t\"manager\",\n\t\t\"team lead\",\n\t\t\"technical lead\",\n\t\t\"lead\"\n\t])) {\n\n\t\tdecision_power = \"High\";\n\t\tdecision_power_score = 80;\n\t\tdecision_reason = \"Management Position\";\n\n\t}\n\n\t/* ========= HR ========= */\n\n\telse if (role === \"hr\") {\n\n\t\tif (contains(text, [\n\t\t\t\"recruiter\",\n\t\t\t\"talent acquisition\"\n\t\t])) {\n\n\t\t\tdecision_power = \"Medium\";\n\t\t\tdecision_power_score = 60;\n\t\t\tdecision_reason = \"Recruiting Influence\";\n\n\t\t}\n\n\t\telse {\n\n\t\t\tdecision_power = \"Medium\";\n\t\t\tdecision_power_score = 55;\n\t\t\tdecision_reason = \"HR Influence\";\n\n\t\t}\n\n\t}\n\n\t/* ========= Engineering ========= */\n\n\telse if (role === \"engineering\") {\n\n\t\tif (item.json.seniority === \"Senior\") {\n\n\t\t\tdecision_power = \"Medium\";\n\t\t\tdecision_power_score = 50;\n\t\t\tdecision_reason = \"Senior Technical Contributor\";\n\n\t\t}\n\n\t\telse {\n\n\t\t\tdecision_power = \"Low\";\n\t\t\tdecision_power_score = 25;\n\t\t\tdecision_reason = \"Individual Contributor\";\n\n\t\t}\n\n\t}\n\n\treturn {\n\t\tjson: {\n\n\t\t\t...item.json,\n\n\t\t\tdecision_power,\n\n\t\t\tdecision_power_score,\n\n\t\t\tdecision_reason\n\n\t\t}\n\t};\n\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          864,
+          0
+        ],
+        "id": "824e0104-e0f7-4c11-b2e4-4f0c44e30a44",
+        "name": "Decision Power Engine"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map((item, index) => {\n\tconst p = item.json || {};\n\n\tconst relationshipEvidence =\n\t\tp.relationship_evidence ??\n\t\tp.analysis?.relationship_evidence ??\n\t\tp.top_candidate_reason?.relationship_evidence ??\n\t\tnull;\n\n\tconst topCandidateReason =\n\t\tp.top_candidate_reason ?? null;\n\n\tconst targetCompany =\n\t\tp.target?.current_company ??\n\t\tp.target?.company ??\n\t\tp.target_company ??\n\t\tp.company ??\n\t\tp.current_company ??\n\t\t\"\";\n\n\tconst detectedSkills =\n\t\tArray.isArray(p.detected_skills)\n\t\t\t? p.detected_skills\n\t\t\t: Array.isArray(p.analysis?.detected_skills)\n\t\t\t\t? p.analysis.detected_skills\n\t\t\t\t: [];\n\n\treturn {\n\t\tjson: {\n\t\t\t...p,\n\n\t\t\tprofile_id:\n\t\t\t\tp.profile_id ??\n\t\t\t\tp.id ??\n\t\t\t\tindex + 1,\n\n\t\t\ttarget_company: targetCompany,\n\n\t\t\trelationship_evidence: relationshipEvidence,\n\n\t\t\ttop_candidate_reason: topCandidateReason,\n\n\t\t\tprofile: {\n\t\t\t\tname: p.name ?? \"\",\n\t\t\t\tlinkedin_url: p.linkedin_url ?? \"\",\n\t\t\t\theadline: p.headline ?? \"\",\n\t\t\t\tposition: p.position ?? \"\",\n\t\t\t\tcurrent_company: p.current_company ?? \"\",\n\t\t\t\tlocation: p.location ?? \"\",\n\t\t\t\tabout: p.about ?? \"\",\n\n\t\t\t\texperience: Array.isArray(p.experience)\n\t\t\t\t\t? p.experience\n\t\t\t\t\t: [],\n\n\t\t\t\teducation: Array.isArray(p.education)\n\t\t\t\t\t? p.education\n\t\t\t\t\t: [],\n\n\t\t\t\tskills: Array.isArray(p.skills)\n\t\t\t\t\t? p.skills\n\t\t\t\t\t: [],\n\n\t\t\t\tfollowers: p.followers ?? 0,\n\t\t\t\tconnections: p.connections ?? 0,\n\n\t\t\t\tmutual_connections:\n\t\t\t\t\tp.mutual_connections ??\n\t\t\t\t\trelationshipEvidence?.mutual_connections ??\n\t\t\t\t\t0\n\t\t\t},\n\n\t\t\tanalysis: {\n\t\t\t\t...(p.analysis || {}),\n\n\t\t\t\trole:\n\t\t\t\t\tp.role ??\n\t\t\t\t\tp.analysis?.role ??\n\t\t\t\t\t\"Unknown\",\n\n\t\t\t\tseniority:\n\t\t\t\t\tp.seniority ??\n\t\t\t\t\tp.analysis?.seniority ??\n\t\t\t\t\t\"Unknown\",\n\n\t\t\t\tdecision_power:\n\t\t\t\t\tp.decision_power ??\n\t\t\t\t\tp.analysis?.decision_power ??\n\t\t\t\t\t\"Unknown\",\n\n\t\t\t\thiring_influence:\n\t\t\t\t\tp.hiring_influence ??\n\t\t\t\t\tp.analysis?.hiring_influence ??\n\t\t\t\t\t\"Unknown\",\n\n\t\t\t\twarm_score:\n\t\t\t\t\tp.warm_score ??\n\t\t\t\t\tp.analysis?.warm_score ??\n\t\t\t\t\t0,\n\n\t\t\t\twarm_grade:\n\t\t\t\t\tp.warm_grade ??\n\t\t\t\t\tp.analysis?.warm_grade ??\n\t\t\t\t\t\"N/A\",\n\n\t\t\t\tdetected_skills: detectedSkills,\n\n\t\t\t\trelationship_evidence: relationshipEvidence\n\t\t\t}\n\t\t}\n\t};\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          0
+        ],
+        "id": "623b3afc-1db9-4224-94de-1ab77b7ef858",
+        "name": "Prepare AI Input"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map((item) => {\n    const p = item.json ?? {};\n    const profile = p.profile ?? {};\n    const analysis = p.analysis ?? {};\n\n    const normalize = (value) =>\n        String(value ?? \"\")\n            .trim()\n            .toLowerCase()\n            .replace(/[^a-z0-9]/g, \"\");\n\n    const clamp = (value, min = 0, max = 100) =>\n        Math.min(max, Math.max(min, Number(value) || 0));\n\n    const seniority = String(analysis.seniority ?? \"\");\n    const decisionPower = String(analysis.decision_power ?? \"\");\n\n    /*\n     * Preserve relationship evidence from any known upstream location.\n     */\n    const relationshipEvidence =\n        p.relationship_evidence ??\n        analysis.relationship_evidence ??\n        profile.relationship_evidence ??\n        p.ai_analysis?.relationship_evidence ??\n        null;\n\n    /*\n     * Use the actual target company when it exists.\n     */\n    const targetCompany =\n        p.target_company ??\n        p.target?.company ??\n        p.target?.current_company ??\n        \"\";\n\n    const currentCompany = profile.current_company ?? \"\";\n\n    const hasTargetCompany =\n        normalize(targetCompany).length > 0;\n\n    const companyMatch =\n        hasTargetCompany &&\n        normalize(currentCompany) === normalize(targetCompany);\n\n    /*\n     * Prefer an existing warm score.\n     */\n    const relationshipStrength = clamp(\n        analysis.warm_score ??\n        analysis.relationship_score ??\n        p.warm_score ??\n        0\n    );\n\n    const credibility =\n        seniority === \"Founder\" ||\n        seniority === \"C-Level\" ||\n        seniority === \"Executive\"\n            ? 95\n            : seniority === \"Lead\" ||\n              seniority === \"Director\" ||\n              seniority === \"Senior\"\n            ? 85\n            : seniority === \"Mid\"\n            ? 75\n            : 60;\n\n    const likelihood =\n        decisionPower === \"Very High\"\n            ? 90\n            : decisionPower === \"High\"\n            ? 80\n            : decisionPower === \"Medium\"\n            ? 65\n            : 50;\n\n    const companyAlignment = hasTargetCompany\n        ? companyMatch\n            ? 100\n            : 40\n        : 70;\n\n    const introductionQuality = Math.round(\n        (\n            relationshipStrength +\n            credibility +\n            likelihood\n        ) / 3\n    );\n\n    const recommendation =\n        introductionQuality >= 85\n            ? \"Strong\"\n            : introductionQuality >= 70\n            ? \"Moderate\"\n            : \"Weak\";\n\n    const companyReason = !hasTargetCompany\n        ? \"Target company was not provided; a neutral alignment score was used.\"\n        : companyMatch\n        ? \"Currently works at the target company.\"\n        : \"Works outside the target company.\";\n\n    const targetCompanyLabel =\n        targetCompany ||\n        currentCompany ||\n        \"the target company\";\n\n    return {\n        json: {\n            ...p,\n\n            /*\n             * Keep the evidence available at the top level too,\n             * so downstream nodes can access it easily.\n             */\n            relationship_evidence: relationshipEvidence,\n\n            ai_analysis: {\n                relationship_evidence: relationshipEvidence,\n\n                relationship_strength: {\n                    score: relationshipStrength,\n                    level:\n                        relationshipStrength >= 80\n                            ? \"Strong\"\n                            : relationshipStrength >= 60\n                            ? \"Medium\"\n                            : \"Weak\"\n                },\n\n                credibility: {\n                    score: credibility,\n                    level:\n                        credibility >= 85\n                            ? \"High\"\n                            : credibility >= 70\n                            ? \"Medium\"\n                            : \"Low\"\n                },\n\n                company_alignment: {\n                    score: companyAlignment,\n                    reason: companyReason\n                },\n\n                industry_alignment: {\n                    score: 80,\n                    reason:\n                        \"Estimated from the detected role and experience.\"\n                },\n\n                likelihood_of_reply: {\n                    score: likelihood,\n                    reason:\n                        \"Estimated using seniority, decision power and profile quality.\"\n                },\n\n                introduction_quality: {\n                    score: introductionQuality,\n                    reason:\n                        \"Estimated from relationship strength, credibility and likelihood of reply.\"\n                },\n\n                overall_recommendation: recommendation,\n\n                explanation:\n                    \"Temporary mock AI analysis generated from the rule-engine outputs.\",\n\n                personalized_introduction:\n                    `Hi ${profile.name || \"there\"}, ` +\n                    `I came across your profile while exploring professionals at ` +\n                    `${targetCompanyLabel}. I was impressed by your background ` +\n                    `and would love to connect and learn more about your experience.`\n            }\n        }\n    };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1552,
+          0
+        ],
+        "id": "9effcd80-45da-4fbf-9246-eb4560cc34df",
+        "name": "tem Mock AI Analysis"
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map(item => {\n    const p = item.json;\n\n    const ruleScore = p.analysis?.warm_score || 0;\n\n    const ai = p.ai_analysis;\n\n    const relationship = ai.relationship_strength.score;\n    const credibility = ai.credibility.score;\n    const company = ai.company_alignment.score;\n    const industry = ai.industry_alignment.score;\n    const reply = ai.likelihood_of_reply.score;\n    const intro = ai.introduction_quality.score;\n\n    // Weighted final score\n    const finalScore = Math.round(\n        ruleScore * 0.30 +\n        relationship * 0.15 +\n        credibility * 0.15 +\n        company * 0.15 +\n        industry * 0.10 +\n        reply * 0.10 +\n        intro * 0.05\n    );\n\n    let finalGrade;\n\n    if (finalScore >= 90)\n        finalGrade = \"A+\";\n    else if (finalScore >= 80)\n        finalGrade = \"A\";\n    else if (finalScore >= 70)\n        finalGrade = \"B\";\n    else if (finalScore >= 60)\n        finalGrade = \"C\";\n    else if (finalScore >= 50)\n        finalGrade = \"D\";\n    else\n        finalGrade = \"F\";\n\n    // ----------------------------\n    // Why this candidate ranked highly\n    // ----------------------------\n    const highlights = [];\n\n    if (relationship >= 80)\n        highlights.push(\"Strong relationship potential\");\n\n    if (company >= 80)\n        highlights.push(\"Excellent company alignment\");\n\n    if (industry >= 80)\n        highlights.push(\"Relevant industry experience\");\n\n    if (credibility >= 80)\n        highlights.push(\"High professional credibility\");\n\n    if (reply >= 80)\n        highlights.push(\"High likelihood of responding\");\n\n    if (intro >= 80)\n        highlights.push(\"Personalized introduction is highly relevant\");\n\n    if (ruleScore >= 80)\n        highlights.push(\"Excellent warm-path score\");\n\n    if (p.analysis?.decision_power === \"Very High\")\n        highlights.push(\"Very high decision-making influence\");\n    else if (p.analysis?.decision_power === \"High\")\n        highlights.push(\"High decision-making influence\");\n\n    if (p.analysis?.hiring_influence === \"Very High\")\n        highlights.push(\"Very high hiring influence\");\n    else if (p.analysis?.hiring_influence === \"High\")\n        highlights.push(\"High hiring influence\");\n\n    const topCandidateReason = {\n        title: \"Why this candidate?\",\n        summary:\n            `${p.name || \"This candidate\"} ranked among the top candidates because of a strong combination of relationship strength, company fit, credibility, and outreach potential.`,\n        highlights: highlights.slice(0, 5)\n    };\n\n    return {\n        json: {\n            ...p,\n\n            final_score: finalScore,\n            final_grade: finalGrade,\n\n            top_candidate_reason: topCandidateReason\n        }\n    };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1728,
+          0
+        ],
+        "id": "7acd733c-7e42-4087-a0a4-c94d93b8fab8",
+        "name": "Final Scoring"
+      },
+      {
+        "parameters": {
+          "sortFieldsUi": {
+            "sortField": [
+              {
+                "fieldName": "final_score",
+                "order": "descending"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.sort",
+        "typeVersion": 1,
+        "position": [
+          1888,
+          0
+        ],
+        "id": "b71143f6-7cb6-49c5-81d8-bc30b0eabbdb",
+        "name": "Rank Candidates"
+      },
+      {
+        "parameters": {
+          "jsCode": "const total = $input.all();\n\nreturn total.map((item, index) => {\n  const p = item.json ?? {};\n\n  const profile = p.profile ?? {};\n  const analysis = p.analysis ?? {};\n  const aiAnalysis = p.ai_analysis ?? {};\n\n  const targetCompany =\n    p.target_company ??\n    p.target?.current_company ??\n    p.target?.company ??\n    \"\";\n\n  const targetPerson =\n    p.target_person ??\n    p.target?.name ??\n    p.target?.profile?.name ??\n    \"\";\n\n  const relationshipEvidence =\n    p.relationship_evidence ??\n    analysis.relationship_evidence ??\n    aiAnalysis.relationship_evidence ??\n    null;\n\n  const topCandidateReason =\n    p.top_candidate_reason ??\n    aiAnalysis.top_candidate_reason ??\n    null;\n\n  return {\n    json: {\n      rank: index + 1,\n\n      target_company: targetCompany,\n      target_person: targetPerson,\n\n      score: p.final_score ?? 0,\n      grade: p.final_grade ?? \"Not available\",\n\n      name: profile.name ?? \"\",\n      linkedin: profile.linkedin_url ?? \"\",\n\n      company: profile.current_company ?? \"\",\n      position: profile.position ?? \"\",\n      location: profile.location ?? \"\",\n\n      role: analysis.role ?? \"\",\n      seniority: analysis.seniority ?? \"\",\n      decision_power: analysis.decision_power ?? \"\",\n      hiring_influence: analysis.hiring_influence ?? \"\",\n      warm_score: analysis.warm_score ?? 0,\n      warm_grade: analysis.warm_grade ?? \"\",\n\n      recommendation:\n        aiAnalysis.overall_recommendation ?? \"\",\n\n      relationship_strength:\n        aiAnalysis.relationship_strength?.level ?? \"\",\n\n      relationship_evidence: relationshipEvidence,\n      top_candidate_reason: topCandidateReason,\n\n      explanation:\n        aiAnalysis.explanation ?? \"\",\n\n      introduction:\n        aiAnalysis.personalized_introduction ?? \"\",\n\n      profile,\n      analysis,\n      ai_analysis: aiAnalysis\n    }\n  };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2080,
+          0
+        ],
+        "id": "121de921-77cb-4b23-a441-689177c64f1a",
+        "name": "Build Final Report"
+      },
+      {
+        "parameters": {
+          "tableId": "ranked_candidates",
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "rank",
+                "fieldValue": "={{ $json.rank }}"
+              },
+              {
+                "fieldId": "final_score",
+                "fieldValue": "={{ $json.score }}"
+              },
+              {
+                "fieldId": "final_grade",
+                "fieldValue": "={{ $json.grade }}"
+              },
+              {
+                "fieldId": "name",
+                "fieldValue": "={{ $json.name }}"
+              },
+              {
+                "fieldId": "linkedin_url",
+                "fieldValue": "={{ $json.linkedin }}"
+              },
+              {
+                "fieldId": "current_company",
+                "fieldValue": "={{ $json.company }}"
+              },
+              {
+                "fieldId": "position",
+                "fieldValue": "={{ $json.position }}"
+              },
+              {
+                "fieldId": "location",
+                "fieldValue": "={{ $json.location }}"
+              },
+              {
+                "fieldId": "role",
+                "fieldValue": "={{ $json.role }}"
+              },
+              {
+                "fieldId": "seniority",
+                "fieldValue": "={{ $json.seniority }}"
+              },
+              {
+                "fieldId": "decision_power",
+                "fieldValue": "={{ $json.decision_power }}"
+              },
+              {
+                "fieldId": "warm_score",
+                "fieldValue": "={{ $json.analysis.warm_score }}"
+              },
+              {
+                "fieldId": "recommendation",
+                "fieldValue": "={{ $json.recommendation }}"
+              },
+              {
+                "fieldId": "explanation",
+                "fieldValue": "={{ $json.explanation }}"
+              },
+              {
+                "fieldId": "personalized_introduction",
+                "fieldValue": "={{$json.ai_analysis.personalized_introduction}}"
+              },
+              {
+                "fieldId": "profile",
+                "fieldValue": "={{ $json.profile }}"
+              },
+              {
+                "fieldId": "analysis",
+                "fieldValue": "={{ $json.analysis }}"
+              },
+              {
+                "fieldId": "ai_analysis",
+                "fieldValue": "={{ $json.ai_analysis }}"
+              },
+              {
+                "fieldId": "owner_user_id",
+                "fieldValue": "={{ $('Webhook').first().json.body.owner_user_id }}"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          3424,
+          -16
+        ],
+        "id": "95f98b5c-9f18-45df-b85a-3b79f5d7b3d2",
+        "name": "Save Candidates",
+        "credentials": {
+          "supabaseApi": {
+            "id": "s7RGwOBWIRTFdwPi",
+            "name": "Supabase account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "mode": "chooseBranch",
+          "useDataOfInput": 2
+        },
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          2800,
+          -16
+        ],
+        "id": "1a433137-41ee-48fc-8c16-6cee9de08462",
+        "name": "Merge"
+      },
+      {
+        "parameters": {
+          "jsCode": "const all = $input.all();\nconst top3 = all.slice(0, 3);\n\nreturn [\n\t{\n\t\tjson: {\n\t\t\tgenerated_at: new Date().toISOString(),\n\t\t\ttotal_candidates: all.length,\n\n\t\t\ttop_3: top3.map((item, index) => {\n\t\t\t\tconst p = item.json ?? {};\n\n\t\t\t\tconst relationshipEvidence =\n\t\t\t\t\tp.relationship_evidence ??\n\t\t\t\t\tp.analysis?.relationship_evidence ??\n\t\t\t\t\tp.ai_analysis?.relationship_evidence ??\n\t\t\t\t\tnull;\n\n\t\t\t\tconst topCandidateReason =\n\t\t\t\t\tp.top_candidate_reason ??\n\t\t\t\t\tnull;\n\n\t\t\t\treturn {\n\t\t\t\t\trank: p.rank ?? index + 1,\n\n\t\t\t\t\t// Basic profile\n\t\t\t\t\tname:\n\t\t\t\t\t\tp.profile?.name ??\n\t\t\t\t\t\tp.name ??\n\t\t\t\t\t\t\"\",\n\n\t\t\t\t\tcompany:\n\t\t\t\t\t\tp.profile?.current_company ??\n\t\t\t\t\t\tp.current_company ??\n\t\t\t\t\t\tp.company ??\n\t\t\t\t\t\t\"\",\n\n\t\t\t\t\tposition:\n\t\t\t\t\t\tp.profile?.position ??\n\t\t\t\t\t\tp.position ??\n\t\t\t\t\t\t\"\",\n\n\t\t\t\t\tlinkedin:\n\t\t\t\t\t\tp.profile?.linkedin_url ??\n\t\t\t\t\t\tp.linkedin_url ??\n\t\t\t\t\t\tp.linkedin ??\n\t\t\t\t\t\t\"\",\n\n\t\t\t\t\tlocation:\n\t\t\t\t\t\tp.profile?.location ??\n\t\t\t\t\t\tp.location ??\n\t\t\t\t\t\t\"\",\n\n\t\t\t\t\t// Scores\n\t\t\t\t\tfinal_score:\n\t\t\t\t\t\tp.final_score ??\n\t\t\t\t\t\tp.score ??\n\t\t\t\t\t\t0,\n\n\t\t\t\t\tfinal_grade:\n\t\t\t\t\t\tp.final_grade ??\n\t\t\t\t\t\tp.grade ??\n\t\t\t\t\t\t\"N/A\",\n\n\t\t\t\t\t// Analysis\n\t\t\t\t\trole:\n\t\t\t\t\t\tp.analysis?.role ??\n\t\t\t\t\t\tp.role ??\n\t\t\t\t\t\t\"Unknown\",\n\n\t\t\t\t\tseniority:\n\t\t\t\t\t\tp.analysis?.seniority ??\n\t\t\t\t\t\tp.seniority ??\n\t\t\t\t\t\t\"Unknown\",\n\n\t\t\t\t\tdecision_power:\n\t\t\t\t\t\tp.analysis?.decision_power ??\n\t\t\t\t\t\tp.decision_power ??\n\t\t\t\t\t\t\"Unknown\",\n\n\t\t\t\t\thiring_influence:\n\t\t\t\t\t\tp.analysis?.hiring_influence ??\n\t\t\t\t\t\tp.hiring_influence ??\n\t\t\t\t\t\t\"Unknown\",\n\n\t\t\t\t\t// AI\n\t\t\t\t\trecommendation:\n\t\t\t\t\t\tp.ai_analysis?.overall_recommendation ??\n\t\t\t\t\t\tp.recommendation ??\n\t\t\t\t\t\t\"Unknown\",\n\n\t\t\t\t\trelationship_strength:\n\t\t\t\t\t\tp.ai_analysis?.relationship_strength?.level ??\n\t\t\t\t\t\tp.relationship_strength ??\n\t\t\t\t\t\t\"Unknown\",\n\n\t\t\t\t\tpersonalized_introduction:\n\t\t\t\t\t\tp.ai_analysis?.personalized_introduction ??\n\t\t\t\t\t\tp.personalized_introduction ??\n\t\t\t\t\t\tp.introduction ??\n\t\t\t\t\t\t\"\",\n\n\t\t\t\t\t// Required frontend reasoning fields\n\t\t\t\t\trelationship_evidence: relationshipEvidence,\n\t\t\t\t\ttop_candidate_reason: topCandidateReason,\n\n\t\t\t\t\t// Keep full objects for future use\n\t\t\t\t\tprofile: p.profile ?? null,\n\n\t\t\t\t\tanalysis: {\n\t\t\t\t\t\t...(p.analysis ?? {}),\n\t\t\t\t\t\trelationship_evidence: relationshipEvidence\n\t\t\t\t\t},\n\n\t\t\t\t\tai_analysis: {\n\t\t\t\t\t\t...(p.ai_analysis ?? {}),\n\t\t\t\t\t\trelationship_evidence: relationshipEvidence\n\t\t\t\t\t}\n\t\t\t\t};\n\t\t\t})\n\t\t}\n\t}\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2224,
+          160
+        ],
+        "id": "a500bed4-81f0-4a08-a61c-722d6297e0e7",
+        "name": "Top 3 Summary"
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "tableId": "ranked_candidates",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "rank",
+                "condition": "gt",
+                "keyValue": "0"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          2336,
+          -112
+        ],
+        "id": "62fed9ef-dae4-460a-b39a-2d33b6217fb5",
+        "name": "Delete a row",
+        "alwaysOutputData": true,
+        "credentials": {
+          "supabaseApi": {
+            "id": "s7RGwOBWIRTFdwPi",
+            "name": "Supabase account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "tableId": "top_candidates",
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "rank",
+                "fieldValue": "={{ $json.rank }}"
+              },
+              {
+                "fieldId": "name",
+                "fieldValue": "={{ $json.name }}"
+              },
+              {
+                "fieldId": "current_company",
+                "fieldValue": "={{ $json.company }}"
+              },
+              {
+                "fieldId": "position",
+                "fieldValue": "={{ $json.position }}"
+              },
+              {
+                "fieldId": "linkedin_url",
+                "fieldValue": "={{ $json.linkedin }}"
+              },
+              {
+                "fieldId": "final_score",
+                "fieldValue": "={{ $json.final_score }}"
+              },
+              {
+                "fieldId": "final_grade",
+                "fieldValue": "={{ $json.final_grade }}"
+              },
+              {
+                "fieldId": "role",
+                "fieldValue": "={{ $json.role }}"
+              },
+              {
+                "fieldId": "seniority",
+                "fieldValue": "={{ $json.seniority }}"
+              },
+              {
+                "fieldId": "decision_power",
+                "fieldValue": "={{ $json.decision_power }}"
+              },
+              {
+                "fieldId": "hiring_influence",
+                "fieldValue": "={{ $json.hiring_influence }}"
+              },
+              {
+                "fieldId": "recommendation",
+                "fieldValue": "={{ $json.recommendation }}"
+              },
+              {
+                "fieldId": "relationship_strength",
+                "fieldValue": "={{ $json.relationship_strength }}"
+              },
+              {
+                "fieldId": "personalized_introduction",
+                "fieldValue": "={{ $json.personalized_introduction }}"
+              },
+              {
+                "fieldId": "location",
+                "fieldValue": "={{ $json.location }}"
+              },
+              {
+                "fieldId": "workflow_run_id",
+                "fieldValue": "={{ $('Webhook').first().json.body.workflow_run_id }}"
+              },
+              {
+                "fieldId": "top_candidate_reason",
+                "fieldValue": "={{ $json.top_candidate_reason }}"
+              },
+              {
+                "fieldId": "owner_user_id",
+                "fieldValue": "={{ $('Webhook').first().json.body.owner_user_id }}"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          3008,
+          128
+        ],
+        "id": "c5abb732-f96f-413a-903d-670203efff8f",
+        "name": "top_candidates",
+        "credentials": {
+          "supabaseApi": {
+            "id": "s7RGwOBWIRTFdwPi",
+            "name": "Supabase account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const input = $input.first().json;\n\n// Ensure the summary contains the top_3 array\nif (!Array.isArray(input.top_3)) {\n\tthrow new Error(\"top_3 array not found.\");\n}\n\n// Convert the array into separate n8n items\nreturn input.top_3.map(candidate => ({\n\tjson: candidate\n}));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2512,
+          256
+        ],
+        "id": "d3885b77-bb5a-4bc1-a393-75014988aac2",
+        "name": "Expand Top 3"
+      },
+      {
+        "parameters": {
+          "operation": "delete",
+          "tableId": "top_candidates",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "rank",
+                "condition": "gt",
+                "keyValue": "0"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          2496,
+          80
+        ],
+        "id": "d8dcc28c-9449-4520-b568-a57531c603e8",
+        "name": "Delete Top Candidates",
+        "alwaysOutputData": true,
+        "credentials": {
+          "supabaseApi": {
+            "id": "s7RGwOBWIRTFdwPi",
+            "name": "Supabase account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "mode": "chooseBranch",
+          "useDataOfInput": 2
+        },
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          2784,
+          320
+        ],
+        "id": "0a41e6b1-b8dc-424d-9661-573ed67f7adc",
+        "name": "Merge1",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "return $input.all().map((item) => {\n    const p = item.json;\n    const evidence = p.relationship_evidence ?? {};\n\n    let warmScore = 0;\n    const reasons = [];\n\n    if (evidence.same_company === true) {\n        warmScore += 35;\n        reasons.push(\"Same company\");\n    }\n\n    if (evidence.same_department === true) {\n        warmScore += 20;\n        reasons.push(\"Same department\");\n    }\n\n    if (evidence.same_location === true) {\n        warmScore += 10;\n        reasons.push(\"Same location\");\n    }\n\n    if (evidence.same_school === true) {\n        warmScore += 15;\n        reasons.push(\"Same school\");\n    }\n\n    const yearsAtCompany = Number(evidence.years_at_company) || 0;\n\n    if (yearsAtCompany >= 5) {\n        warmScore += 15;\n        reasons.push(\"Long company tenure\");\n    } else if (yearsAtCompany >= 2) {\n        warmScore += 10;\n        reasons.push(\"Established company tenure\");\n    } else if (yearsAtCompany > 0) {\n        warmScore += 5;\n        reasons.push(\"Current company tenure\");\n    }\n\n    const mutualConnections = Number(p.mutual_connections) || 0;\n\n    if (mutualConnections >= 10) {\n        warmScore += 15;\n        reasons.push(\"Many mutual connections\");\n    } else if (mutualConnections >= 5) {\n        warmScore += 10;\n        reasons.push(\"Several mutual connections\");\n    } else if (mutualConnections > 0) {\n        warmScore += 5;\n        reasons.push(\"Mutual connection\");\n    }\n\n    warmScore = Math.min(100, warmScore);\n\n    let warmGrade;\n\n    if (warmScore >= 85) {\n        warmGrade = \"A\";\n    } else if (warmScore >= 70) {\n        warmGrade = \"B\";\n    } else if (warmScore >= 55) {\n        warmGrade = \"C\";\n    } else if (warmScore >= 40) {\n        warmGrade = \"D\";\n    } else {\n        warmGrade = \"F\";\n    }\n\n    return {\n        json: {\n            ...p,\n            warm_score: warmScore,\n            warm_grade: warmGrade,\n            warm_reasons: reasons\n        }\n    };\n});"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1072,
+          0
+        ],
+        "id": "b1c0f43e-bff0-4f82-969a-2408659f0e45",
+        "name": "Warm Score Engine"
+      },
+      {
+        "parameters": {},
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          3616,
+          64
+        ],
+        "id": "cd7656f2-3d26-46b4-8d07-0de6b235e90e",
+        "name": "Merge2"
+      },
+      {
+        "parameters": {
+          "jsCode": "const rows = $input.all().map((item) => item.json ?? {});\n\n/*\n * Merge2 receives:\n * - 28 full rows from ranked_candidates\n * - 3 simplified rows from top_candidates\n *\n * Only ranked_candidates rows contain the complete:\n * profile, analysis and ai_analysis objects.\n */\nconst rankedCandidates = rows.filter((row) => {\n  const profile = row.profile ?? {};\n\n  return Boolean(\n    profile &&\n    typeof profile === \"object\" &&\n    profile.name &&\n    profile.linkedin_url &&\n    row.analysis &&\n    typeof row.analysis === \"object\" &&\n    row.ai_analysis &&\n    typeof row.ai_analysis === \"object\"\n  );\n});\n\n/*\n * Remove accidental duplicate ranked rows using LinkedIn URL.\n */\nconst uniqueRankedCandidates = Array.from(\n  new Map(\n    rankedCandidates.map((candidate) => [\n      String(candidate.profile.linkedin_url).trim().toLowerCase(),\n      candidate\n    ])\n  ).values()\n);\n\nconst totalCandidates = uniqueRankedCandidates.length;\n\n/*\n * Calculate average score only from the 28 valid ranked candidates.\n */\nconst scores = uniqueRankedCandidates\n  .map((row) => Number(row.final_score ?? row.score))\n  .filter((score) => Number.isFinite(score));\n\nconst averageFinalScore =\n  scores.length > 0\n    ? Math.round(\n        scores.reduce((sum, score) => sum + score, 0) / scores.length\n      )\n    : 0;\n\n/*\n * Try to recover the original target from the Webhook node.\n */\nlet webhookData = {};\n\ntry {\n  webhookData = $(\"Webhook\").first().json ?? {};\n} catch (error) {\n  webhookData = {};\n}\n\nconst webhookTarget =\n  webhookData.target ??\n  webhookData.body?.target ??\n  {};\n\n/*\n * Also inspect candidate rows in case target information\n * was preserved somewhere downstream.\n */\nconst firstCandidate = uniqueRankedCandidates[0] ?? {};\n\nconst rowWithTarget = rows.find(\n  (row) =>\n    row.target ||\n    row.target_person ||\n    row.target_company\n) ?? {};\n\nconst targetCompany =\n  webhookTarget.current_company ||\n  webhookTarget.company ||\n  webhookTarget.target_company ||\n  firstCandidate.target_company ||\n  firstCandidate.target?.current_company ||\n  firstCandidate.target?.company ||\n  rowWithTarget.target_company ||\n  rowWithTarget.target?.current_company ||\n  rowWithTarget.target?.company ||\n  \"Not available\";\n\nconst targetPerson =\n  webhookTarget.name ||\n  webhookTarget.full_name ||\n  webhookTarget.target_person ||\n  firstCandidate.target_person ||\n  firstCandidate.target?.name ||\n  firstCandidate.target?.profile?.name ||\n  rowWithTarget.target_person ||\n  rowWithTarget.target?.name ||\n  rowWithTarget.target?.profile?.name ||\n  \"Not available\";\n\nconst generatedAt = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      status: \"completed\",\n\n      target_company: targetCompany,\n      target_person: targetPerson,\n\n      total_candidates: totalCandidates,\n      top_candidates_count: Math.min(3, totalCandidates),\n      average_final_score: averageFinalScore,\n\n      completed_at: generatedAt,\n\n      metadata: {\n        generated_at: generatedAt,\n        ranked_candidates_received: totalCandidates,\n        top_candidates_received: Math.max(\n          0,\n          rows.length - rankedCandidates.length\n        ),\n        total_merged_items_received: rows.length\n      }\n    }\n  }\n];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3872,
+          64
+        ],
+        "id": "c75432d3-3b4d-4e61-8d8a-00113f3c055d",
+        "name": "Build Workflow Summary1"
+      },
+      {
+        "parameters": {
+          "jsCode": "const workflowRun = $(\"Save Workflow Run\").first().json ?? {};\n\nconst workflowRunId =\n  workflowRun.id ??\n  workflowRun.data?.id ??\n  workflowRun.record?.id;\n\nif (!workflowRunId) {\n  throw new Error(\n    \"Workflow run ID was not found in Save Workflow Run output.\"\n  );\n}\n\nreturn $input.all().map((item) => ({\n  json: {\n    ...item.json,\n    workflow_run_id: workflowRunId\n  }\n}));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4432,
+          112
+        ],
+        "id": "f407cb35-b5ed-487a-88a5-13403b1ff7e0",
+        "name": "Attach Workflow Run ID"
+      },
+      {
+        "parameters": {
+          "mode": "chooseBranch",
+          "useDataOfInput": 2
+        },
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          4256,
+          -128
+        ],
+        "id": "2aca57f9-3dfe-4a80-950a-cd0821e6bc10",
+        "name": "Merge3"
+      },
+      {
+        "parameters": {
+          "jsCode": "const workflowRun = $(\"Save Workflow Run\").first().json ?? {};\n\nconst workflowRunId =\n  workflowRun.id ??\n  workflowRun.data?.id ??\n  workflowRun.record?.id;\n\nif (!workflowRunId) {\n  throw new Error(\n    \"Workflow run ID was not found in Save Workflow Run output.\"\n  );\n}\n\nreturn $input.all().map((item) => ({\n  json: {\n    ...item.json,\n    workflow_run_id: workflowRunId\n  }\n}));"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4320,
+          352
+        ],
+        "id": "3d650300-e6ba-40d8-94cf-b04551f600cf",
+        "name": "Attach Workflow Run ID Top 3"
+      },
+      {
+        "parameters": {
+          "mode": "chooseBranch",
+          "useDataOfInput": 2
+        },
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 3.2,
+        "position": [
+          4064,
+          320
+        ],
+        "id": "e10f8e86-71f1-4835-b587-4746c6bd8e64",
+        "name": "Wait for Workflow Run Top 3"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "tableId": "workflow_runs",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "id",
+                "condition": "eq",
+                "keyValue": "={{ $('Webhook').first().json.body.workflow_run_id }}"
+              }
+            ]
+          },
+          "fieldsUi": {
+            "fieldValues": [
+              {
+                "fieldId": "target_company",
+                "fieldValue": "={{$json.target_company}}"
+              },
+              {
+                "fieldId": "target_person",
+                "fieldValue": "={{$json.target_person}}"
+              },
+              {
+                "fieldId": "total_candidates",
+                "fieldValue": "={{$json.total_candidates}}"
+              },
+              {
+                "fieldId": "top_candidates_count",
+                "fieldValue": "={{$json.top_candidates_count}}"
+              },
+              {
+                "fieldId": "average_final_score",
+                "fieldValue": "={{$json.average_final_score}}"
+              },
+              {
+                "fieldId": "status",
+                "fieldValue": "=completed"
+              },
+              {
+                "fieldId": "completed_at",
+                "fieldValue": "={{$now}}"
+              },
+              {
+                "fieldId": "metadata",
+                "fieldValue": "={{$json.metadata}}"
+              }
+            ]
+          }
+        },
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [
+          4096,
+          64
+        ],
+        "id": "783f3d81-4b89-4143-815d-0f36c8793197",
+        "name": "Save Workflow Run",
+        "credentials": {
+          "supabaseApi": {
+            "id": "s7RGwOBWIRTFdwPi",
+            "name": "Supabase account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ {\n  accepted: true,\n  execution_id: $execution.id\n} }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          4640,
+          112
+        ],
+        "id": "cf50f907-53e1-44bb-a623-f3cf9fedbb95",
+        "name": "Respond to Webhook"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Split Profiles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split Profiles": {
+        "main": [
+          [
+            {
+              "node": "Normalize Data",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize Data": {
+        "main": [
+          [
+            {
+              "node": "Extract Features",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Features": {
+        "main": [
+          [
+            {
+              "node": "Seniority Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Seniority Engine": {
+        "main": [
+          [
+            {
+              "node": "Decision Power Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Decision Power Engine": {
+        "main": [
+          [
+            {
+              "node": "Warm Score Engine",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare AI Input": {
+        "main": [
+          [
+            {
+              "node": "tem Mock AI Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "tem Mock AI Analysis": {
+        "main": [
+          [
+            {
+              "node": "Final Scoring",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Final Scoring": {
+        "main": [
+          [
+            {
+              "node": "Rank Candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rank Candidates": {
+        "main": [
+          [
+            {
+              "node": "Build Final Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Final Report": {
+        "main": [
+          [
+            {
+              "node": "Top 3 Summary",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Delete a row",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 1
+            },
+            {
+              "node": "Merge2",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge": {
+        "main": [
+          [
+            {
+              "node": "Save Candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Top 3 Summary": {
+        "main": [
+          [
+            {
+              "node": "Delete Top Candidates",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Expand Top 3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete a row": {
+        "main": [
+          [
+            {
+              "node": "Merge",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Expand Top 3": {
+        "main": [
+          [
+            {
+              "node": "Merge1",
+              "type": "main",
+              "index": 1
+            },
+            {
+              "node": "Merge2",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Delete Top Candidates": {
+        "main": [
+          [
+            {
+              "node": "Merge1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge1": {
+        "main": [
+          [
+            {
+              "node": "Wait for Workflow Run Top 3",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Warm Score Engine": {
+        "main": [
+          [
+            {
+              "node": "Prepare AI Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Candidates": {
+        "main": [
+          [
+            {
+              "node": "Merge3",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "top_candidates": {
+        "main": [
+          []
+        ]
+      },
+      "Merge2": {
+        "main": [
+          [
+            {
+              "node": "Build Workflow Summary1",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Workflow Summary1": {
+        "main": [
+          [
+            {
+              "node": "Save Workflow Run",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Attach Workflow Run ID": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Merge3": {
+        "main": [
+          [
+            {
+              "node": "Attach Workflow Run ID",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Attach Workflow Run ID Top 3": {
+        "main": [
+          [
+            {
+              "node": "top_candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Wait for Workflow Run Top 3": {
+        "main": [
+          [
+            {
+              "node": "Attach Workflow Run ID Top 3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Workflow Run": {
+        "main": [
+          [
+            {
+              "node": "Merge3",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Wait for Workflow Run Top 3",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond to Webhook": {
+        "main": [
+          [
+            {
+              "node": "Save Candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate",
+      "availableInMCP": false
+    },
+    "staticData": null,
+    "meta": {
+      "templateCredsSetupCompleted": true
+    },
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "f03441f7-6ff7-4460-a607-d316601b514e",
+    "activeVersionId": "f03441f7-6ff7-4460-a607-d316601b514e",
+    "versionCounter": 396,
+    "triggerCount": 1,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-07-08T07:48:17.103Z",
+        "createdAt": "2026-07-08T07:48:17.103Z",
+        "role": "workflow:owner",
+        "workflowId": "gYWWTlAoBPAFJtTe",
+        "projectId": "1qnsekfri14xGivZ",
+        "project": {
+          "updatedAt": "2026-06-12T23:26:38.862Z",
+          "createdAt": "2026-06-12T23:26:13.612Z",
+          "id": "1qnsekfri14xGivZ",
+          "name": "Ali raddeyxx@gmail.com <raddeyxx@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "5088bf5d-0747-4036-b40d-c75330db1c47"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": "Version f03441f7",
+      "description": ""
+    }
+  }
+]

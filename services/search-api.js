@@ -1,12 +1,49 @@
 const { createUserSupabaseClient } = require("./supabase-server");
-const { cacheDecisionFromRow } = require("./search-cache");
 const { startTargetSearchExecution } = require("./playwright-search-runner");
+const { randomUUID } = require("crypto");
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUEST_FIELDS = new Set(["workflow_run_id", "search_request_id"]);
 
-function errorResponse(res, status, code, message) {
-    return res.status(status).json({ success: false, code, message });
+function errorResponse(res, status, code, message, errorId) {
+    return res.status(status).json({ success: false, code, message, ...(errorId ? { error_id: errorId } : {}) });
+}
+
+function databaseErrorDetails(error) {
+    return {
+        code: error?.code || "unknown",
+        message: error?.message || "unknown",
+        details: error?.details || null,
+        hint: error?.hint || null
+    };
+}
+
+async function markSearchStartFailed(supabase, { ownerUserId, workflowRunId, searchRequestId, errorId }) {
+    if (!supabase || !ownerUserId) return;
+    const failedAt = new Date().toISOString();
+    const message = `Search startup failed. Reference: ${errorId}`;
+    if (typeof supabase.rpc === "function") {
+        const transaction = await supabase.rpc("fail_target_search_pair", {
+            p_workflow_run_id: workflowRunId,
+            p_search_request_id: searchRequestId,
+            p_error_message: message
+        });
+        if (!transaction.error) return;
+        if (!/PGRST202|42883/.test(transaction.error.code || "")) throw transaction.error;
+    }
+    const [workflow, search] = await Promise.all([
+        supabase.from("workflow_runs").update({
+            status: "failed", failed_at: failedAt, current_step: "failed",
+            current_message: "Search failed to start.", estimated_remaining_seconds: null
+        }).eq("id", workflowRunId).eq("owner_user_id", ownerUserId)
+            .in("status", ["queued", "running", "starting", "processing", "in_progress"]),
+        supabase.from("search_requests").update({
+            status: "failed", failed_at: failedAt, error_message: message
+        }).eq("id", searchRequestId).eq("workflow_run_id", workflowRunId)
+            .eq("owner_user_id", ownerUserId)
+            .in("status", ["queued", "running", "starting", "processing", "in_progress"])
+    ]);
+    if (workflow.error || search.error) throw workflow.error || search.error;
 }
 
 function readBearerToken(req) {
@@ -21,24 +58,24 @@ function validRequestBody(body) {
     return UUID_PATTERN.test(body.workflow_run_id || "") && UUID_PATTERN.test(body.search_request_id || "");
 }
 
-function buildExecutionPayload(row) {
-    return {
+async function buildExecutionPayload(row) {
+    const { normalizeLinkedInProfileUrl, validateTargetSearchRequest } = await import("../types/target-search-request.ts");
+    const linkedinUrl = normalizeLinkedInProfileUrl(row.linkedin_url || row.linkedin_name);
+    return validateTargetSearchRequest({
         owner_user_id: row.owner_user_id,
         workflow_run_id: row.workflow_run_id,
         search_request_id: row.search_request_id,
         target: {
-            target_name: row.target_name,
+            name: row.target_name,
             current_company: row.current_company,
-            linkedin_name: row.linkedin_name,
-            location: row.location
-        },
-        filters: {
+            linkedin_url: linkedinUrl,
+            location: row.location,
             keywords: row.keywords,
             company_filter: row.company_filter,
             school_filter: row.school_filter
         },
         normalized_search_key: row.normalized_search_key
-    };
+    });
 }
 
 function createStartSearchHandler(options = {}) {
@@ -59,9 +96,11 @@ function createStartSearchHandler(options = {}) {
         const workflowRunId = req.body.workflow_run_id;
         const searchRequestId = req.body.search_request_id;
         const requestStartedAt = Date.now();
+        let supabase = null;
+        let ownerUserId = null;
 
         try {
-            const supabase = createClient(accessToken);
+            supabase = createClient(accessToken);
             const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
 
             if (userError || !userData?.user?.id) {
@@ -69,30 +108,40 @@ function createStartSearchHandler(options = {}) {
                 return errorResponse(res, 401, "UNAUTHORIZED", "Your session is invalid or expired.");
             }
 
-            const ownerUserId = userData.user.id;
+            ownerUserId = userData.user.id;
+            const { error: recoveryError } = await supabase.rpc("recover_abandoned_target_searches");
+            if (recoveryError) throw recoveryError;
             const { error: progressError } = await supabase.from("workflow_runs").update({
                 current_step: "checking_cache",
                 current_message: "Checking for cached searches...",
                 progress_percent: 5,
-                estimated_remaining_seconds: 30
+                estimated_remaining_seconds: null
             }).eq("id", workflowRunId).eq("owner_user_id", ownerUserId);
             if (progressError) throw progressError;
-            const { data, error } = await supabase.rpc("prepare_target_search_with_cache", {
+            const { data, error } = await supabase.rpc("start_target_search", {
                 p_workflow_run_id: workflowRunId,
                 p_search_request_id: searchRequestId
             });
 
             if (error) {
+                const errorId = randomUUID();
                 console.error("Search API database failure", {
+                    error_id: errorId,
                     workflow_run_id: workflowRunId,
                     search_request_id: searchRequestId,
                     owner_user_id: ownerUserId,
-                    code: error.code || "unknown"
+                    ...databaseErrorDetails(error)
                 });
+                await markSearchStartFailed(supabase, {
+                    ownerUserId, workflowRunId, searchRequestId, errorId
+                }).catch(failureError => console.error("Search API failure synchronization failed", {
+                    error_id: errorId, workflow_run_id: workflowRunId,
+                    search_request_id: searchRequestId, ...databaseErrorDetails(failureError)
+                }));
                 const status = ["23505", "40001"].includes(error.code) ? 409 : 500;
-                const code = status === 409 ? "INVALID_SEARCH_STATE" : "CACHE_COPY_FAILED";
-                const message = status === 409 ? "The search state changed before it could be prepared." : "Unable to apply cached search results.";
-                return errorResponse(res, status, code, message);
+                const code = status === 409 ? "INVALID_SEARCH_STATE" : "DATABASE_ERROR";
+                const message = status === 409 ? "The search state changed before it could be prepared." : "Unable to prepare the search.";
+                return errorResponse(res, status, code, message, errorId);
             }
 
             const result = data?.[0];
@@ -105,51 +154,18 @@ function createStartSearchHandler(options = {}) {
             if (result.result_code === "invalid_state") {
                 return errorResponse(res, 409, "INVALID_SEARCH_STATE", "The search cannot be started in its current state.");
             }
-            if (!["cache_hit", "cache_miss", "cache_invalid"].includes(result.result_code)) {
+            if (!["started", "already_started"].includes(result.result_code)) {
                 return errorResponse(res, 500, "INTERNAL_ERROR", "Unable to prepare the search.");
             }
 
-            const cacheDecision = cacheDecisionFromRow(result);
-            const executionPayload = cacheDecision.hit ? null : prepareExecution(result);
-            const searchKeyPrefix = (result.normalized_search_key || "").slice(0, 12);
+            const executionPayload = await prepareExecution(result);
 
-            console.log("Search API cache decision", {
-                workflow_run_id: workflowRunId,
-                search_request_id: searchRequestId,
-                owner_user_id: ownerUserId,
-                normalized_search_key_prefix: searchKeyPrefix,
-                cache_hit: cacheDecision.hit,
-                cache_invalid: Boolean(cacheDecision.invalid),
-                cache_id: cacheDecision.cacheId,
-                copied_candidate_count: cacheDecision.hit ? cacheDecision.copiedCandidateCount : 0,
-                copied_top_candidate_count: cacheDecision.hit ? cacheDecision.copiedTopCandidateCount : 0
-            });
-
-            // Cache misses continue through the managed Step 7 Playwright execution.
-            void executionPayload;
-
-            if (cacheDecision.hit) {
-                const { error: completionError } = await supabase.from("workflow_runs").update({
-                    cache_hit: true,
-                    current_step: "completed",
-                    current_message: "Search completed successfully.",
-                    progress_percent: 100,
-                    estimated_remaining_seconds: 0
-                }).eq("id", workflowRunId).eq("owner_user_id", ownerUserId);
-                if (completionError) throw completionError;
-                console.log("Search API request completed", {
-                    workflow_run_id: workflowRunId, search_request_id: searchRequestId,
-                    owner_user_id: ownerUserId, outcome: "cache_hit",
-                    elapsed_ms: Date.now() - requestStartedAt
-                });
-                return res.json({
-                    success: true,
-                    cache_hit: true,
-                    workflow_run_id: workflowRunId,
-                    search_request_id: searchRequestId,
-                    status: "completed",
-                    copied_candidate_count: cacheDecision.copiedCandidateCount,
-                    message: "Search completed using cached results."
+            if (executionPayload) {
+                console.log("Search API automation input", {
+                    workflow_run_id: executionPayload.workflow_run_id,
+                    search_request_id: executionPayload.search_request_id,
+                    resolved_target_name: executionPayload.target.name,
+                    resolved_linkedin_url: executionPayload.target.linkedin_url
                 });
             }
 
@@ -163,26 +179,35 @@ function createStartSearchHandler(options = {}) {
 
             return res.json({
                 success: true,
-                cache_hit: false,
+                cache_hit: null,
                 already_executing: launch.alreadyExecuting,
                 workflow_run_id: workflowRunId,
                 search_request_id: searchRequestId,
                 status: "running",
-                next_action: "playwright_required",
-                message: "No valid cache was found. Search is ready for execution."
+                next_action: "cache_check_pending",
+                message: "Search execution started."
             });
         } catch (error) {
+            const errorId = randomUUID();
             console.error("Search API unexpected failure", {
+                error_id: errorId,
                 workflow_run_id: workflowRunId,
                 search_request_id: searchRequestId,
-                code: error.code || "unknown"
+                ...databaseErrorDetails(error)
             });
+            await markSearchStartFailed(supabase, {
+                ownerUserId, workflowRunId, searchRequestId, errorId
+            }).catch(failureError => console.error("Search API failure synchronization failed", {
+                error_id: errorId, workflow_run_id: workflowRunId,
+                search_request_id: searchRequestId, ...databaseErrorDetails(failureError)
+            }));
             const isConfigurationError = error.code === "SUPABASE_CONFIG_MISSING";
             return errorResponse(
                 res,
                 500,
                 isConfigurationError ? "DATABASE_ERROR" : "INTERNAL_ERROR",
-                isConfigurationError ? "Unable to connect to Supabase." : "Unable to prepare the search."
+                isConfigurationError ? "Unable to connect to Supabase." : "Unable to prepare the search.",
+                errorId
             );
         }
     };
@@ -192,6 +217,8 @@ module.exports = {
     UUID_PATTERN,
     buildExecutionPayload,
     createStartSearchHandler,
+    databaseErrorDetails,
+    markSearchStartFailed,
     readBearerToken,
     validRequestBody
 };

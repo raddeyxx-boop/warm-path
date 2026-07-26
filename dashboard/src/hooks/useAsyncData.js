@@ -5,51 +5,59 @@ export function useAsyncData(loader, dependencies = []) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [lastRefreshed, setLastRefreshed] = useState(null)
-  const [refreshIndex, setRefreshIndex] = useState(0)
   const loaderRef = useRef(loader)
+  const mountedRef = useRef(false)
+  const inFlightRef = useRef(null)
+  const hasDataRef = useRef(false)
   const dependencyKey = JSON.stringify(dependencies)
 
   useEffect(() => {
     loaderRef.current = loader
   }, [loader])
 
-  const refresh = useCallback(() => {
-    setRefreshIndex((value) => value + 1)
-  }, [])
+  const execute = useCallback(() => {
+    if (inFlightRef.current) return inFlightRef.current
 
-  useEffect(() => {
-    let active = true
+    if (!hasDataRef.current) setLoading(true)
+    setError('')
 
-    async function load() {
-      setLoading(true)
-      setError('')
-
-      try {
-        const result = await loaderRef.current()
-        if (!active) return
+    const request = Promise.resolve()
+      .then(() => loaderRef.current())
+      .then((result) => {
+        if (!mountedRef.current) return { ok: false, cancelled: true }
+        hasDataRef.current = true
         setData(result)
         setLastRefreshed(new Date())
-      } catch (err) {
-        if (!active) return
+        return { ok: true, data: result }
+      })
+      .catch((err) => {
+        if (!mountedRef.current) return { ok: false, cancelled: true }
         console.error(err)
         setError(err.message || 'Something went wrong while loading data.')
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
+        return { ok: false, error: err }
+      })
+      .finally(() => {
+        if (inFlightRef.current === request) inFlightRef.current = null
+        if (mountedRef.current) setLoading(false)
+      })
 
-    load()
+    inFlightRef.current = request
+    return request
+  }, [dependencyKey])
 
+  useEffect(() => {
+    mountedRef.current = true
+    void execute()
     return () => {
-      active = false
+      mountedRef.current = false
     }
-  }, [dependencyKey, refreshIndex])
+  }, [execute])
 
   return {
     data,
     error,
     loading,
     lastRefreshed,
-    refresh,
+    refresh: execute,
   }
 }

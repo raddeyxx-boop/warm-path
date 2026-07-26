@@ -6,8 +6,13 @@ const PROFILE_COLUMNS = `
   id,
   email,
   full_name,
+  contact_number,
   role,
   is_active,
+  approval_status,
+  approved_at,
+  approved_by,
+  rejected_at,
   created_at,
   updated_at
 `
@@ -60,8 +65,6 @@ export function AuthProvider({ children }) {
       setIsProfileLoading(true)
       setAuthError('')
 
-      if (import.meta.env.DEV) console.debug('[auth] loading profile', nextUserId)
-
       const { data, error } = await fetchProfile(nextUserId)
       if (loadId !== profileLoadIdRef.current) return null
 
@@ -82,7 +85,6 @@ export function AuthProvider({ children }) {
       }
 
       setProfile(data)
-      if (import.meta.env.DEV) console.debug('[auth] profile loaded', data.id)
       return data
     })()
 
@@ -170,11 +172,6 @@ export function AuthProvider({ children }) {
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!mounted) return
 
-      if (import.meta.env.DEV) {
-        console.debug('[auth] event', event)
-        console.debug('[auth] session user', nextSession?.user?.id)
-      }
-
       setSession(nextSession ?? null)
 
       if (event === 'SIGNED_OUT') {
@@ -252,6 +249,73 @@ export function AuthProvider({ children }) {
     return { session: nextSession, user, profile: nextProfile }
   }, [loadProfileForUser])
 
+  const signUp = useCallback(async ({ fullName, email, password, contactNumber }) => {
+    if (!supabase) throw new Error('Supabase is not configured.')
+    setAuthError('')
+
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+    if (!emailPattern.test(normalizedEmail)) {
+      throw new Error('Please enter a valid email address.')
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          contact_number: contactNumber.trim(),
+        },
+      },
+    })
+
+    if (error) {
+      console.error('Supabase registration failed:', {
+        code: error.code,
+        message: error.message,
+        status: error.status,
+      })
+
+      if (
+        error.code === 'email_address_invalid' ||
+        /invalid email|email address is invalid/i.test(error.message || '')
+      ) {
+        throw new Error('Please enter a valid email address.')
+      }
+
+      if (/already|registered|exists/i.test(error.message || '')) {
+        throw new Error('An account already exists for this email address.')
+      }
+
+      if (/password/i.test(error.message || '')) {
+        throw new Error('The password does not meet the account security requirements.')
+      }
+
+      throw new Error('We could not create your account. Please check your details and try again.')
+    }
+
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      throw new Error('An account already exists for this email address.')
+    }
+
+    const nextSession = data.session ?? null
+    if (nextSession?.user?.id) {
+      setSession(nextSession)
+      const nextProfile = await loadProfileForUser(nextSession.user.id, { signOutInactive: false })
+      if (!nextProfile) throw new Error('Your account was created, but its profile could not be loaded.')
+      return { session: nextSession, user: data.user, profile: nextProfile, requiresEmailConfirmation: false }
+    }
+
+    return {
+      session: null,
+      user: data.user,
+      profile: null,
+      requiresEmailConfirmation: true,
+    }
+  }, [loadProfileForUser])
+
   const signOut = useCallback(async () => {
     if (supabase) await supabase.auth.signOut()
     clearAuthState()
@@ -264,13 +328,16 @@ export function AuthProvider({ children }) {
     profile,
     role: profile?.role || null,
     isAdmin: profile?.role === 'admin',
+    approvalStatus: profile?.approval_status || null,
+    isApproved: profile?.role === 'admin' || profile?.approval_status === 'approved',
     isAuthenticated: Boolean(session?.user?.id),
     isLoading,
     authError,
     signIn,
+    signUp,
     signOut,
     refreshProfile,
-  }), [authError, isLoading, profile, refreshProfile, session, signIn, signOut])
+  }), [authError, isLoading, profile, refreshProfile, session, signIn, signOut, signUp])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

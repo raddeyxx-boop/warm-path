@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import { subscribeWorkflowRuns } from '../services/supabaseData'
 
-export function useWorkflowCompletionRefresh(refresh) {
+export function useWorkflowCompletionRefresh(refresh, { refreshEveryChange = false } = {}) {
   useEffect(() => {
     return subscribeWorkflowRuns((event) => {
-      if (event.new?.status === 'completed') refresh()
+      if (refreshEveryChange || event.new?.status === 'completed') refresh()
     })
-  }, [refresh])
+  }, [refresh, refreshEveryChange])
 }

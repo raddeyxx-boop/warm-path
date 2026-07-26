@@ -1,4 +1,4 @@
-import { fallback, formatScore, relationshipValue } from './format'
+import { fallback, formatScore, relationshipValue } from './format.js'
 
 export function normalizeTopCandidateReason(value) {
   if (!value) return null
@@ -87,11 +87,14 @@ export function normalizeRelationshipEvidence(value) {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
 
   const evidence = {}
-  ;['same_company', 'same_location', 'same_school', 'same_department'].forEach((field) => {
+  ;['same_company', 'same_department', 'same_location', 'same_school', 'current_employee'].forEach((field) => {
     if (typeof parsed[field] === 'boolean') evidence[field] = parsed[field]
   })
   ;['department_similarity', 'years_at_company'].forEach((field) => {
     if (typeof parsed[field] === 'number' && Number.isFinite(parsed[field])) evidence[field] = parsed[field]
+  })
+  ;['shared_skills', 'shared_technologies', 'experience_overlap', 'education_overlap'].forEach((field) => {
+    if (Array.isArray(parsed[field])) evidence[field] = parsed[field].filter((item) => typeof item === 'string' && item.trim())
   })
 
   return Object.keys(evidence).length ? evidence : null
@@ -144,7 +147,23 @@ export function buildRelationshipEvidenceItems(evidence, candidate) {
     })
   }
 
-  if (typeof evidence.department_similarity === 'number' && Number.isFinite(evidence.department_similarity)) {
+  if (evidence.current_employee === true) {
+    items.push({ key: 'current-employee', label: 'Current employee', value: company || 'Yes', text: 'Current employee' })
+  }
+
+  ;[
+    ['shared_skills', 'shared-skills', 'Shared skills'],
+    ['shared_technologies', 'shared-technologies', 'Shared technologies'],
+    ['experience_overlap', 'experience-overlap', 'Experience overlap'],
+    ['education_overlap', 'education-overlap', 'Education overlap'],
+  ].forEach(([field, key, label]) => {
+    if (evidence[field]?.length) {
+      const value = evidence[field].join(', ')
+      items.push({ key, label, value, text: `${label}: ${value}` })
+    }
+  })
+
+  if (typeof evidence.department_similarity === 'number' && Number.isFinite(evidence.department_similarity) && evidence.department_similarity > 0) {
     const value = formatSimilarity(evidence.department_similarity)
     items.push({
       key: 'department-similarity',
@@ -154,7 +173,7 @@ export function buildRelationshipEvidenceItems(evidence, candidate) {
     })
   }
 
-  if (typeof evidence.years_at_company === 'number' && Number.isFinite(evidence.years_at_company) && evidence.years_at_company >= 0) {
+  if (typeof evidence.years_at_company === 'number' && Number.isFinite(evidence.years_at_company) && evidence.years_at_company > 0) {
     const value = formatYears(evidence.years_at_company)
     items.push({
       key: 'years-at-company',
@@ -164,7 +183,7 @@ export function buildRelationshipEvidenceItems(evidence, candidate) {
     })
   }
 
-  return items.slice(0, 6)
+  return items.slice(0, 10)
 }
 
 export function formatSimilarity(value) {

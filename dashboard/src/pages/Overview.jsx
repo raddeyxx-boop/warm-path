@@ -1,27 +1,27 @@
-import { Activity, Award, Star, Target, Trophy, Users } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Activity, Star, Target, Trophy, Users } from 'lucide-react'
+import { Link, useOutletContext } from 'react-router-dom'
 import { CandidateCard } from '../components/CandidateCard'
+import { DarkDashboardPage } from '../components/dark-dashboard/DarkDashboardPage'
 import { EmptyState, ErrorState, LoadingState, SkeletonGrid } from '../components/StateBlocks'
 import { StatusBadge } from '../components/Badge'
 import { useAsyncData } from '../hooks/useAsyncData'
 import { usePageMeta } from '../hooks/usePageMeta'
 import { useWorkflowCompletionRefresh } from '../hooks/useWorkflowCompletionRefresh'
 import { getDashboardStats, getRunTargetSummary } from '../services/supabaseData'
-import { fallback, formatDate, formatNumber, formatScore } from '../utils/format'
+import { fallback, formatDate, formatNumber } from '../utils/format'
+import { DASHBOARD_METRIC_DEFINITIONS, formatDashboardMetricValue } from '../utils/dashboardMetrics'
 
-const statCards = [
-  { key: 'runs', label: 'Workflow runs', icon: Activity, note: 'Completed intelligence cycles' },
-  { key: 'ranked', label: 'Ranked candidates', icon: Users, note: 'Valid candidates in scope' },
-  { key: 'top', label: 'Top candidates', icon: Trophy, note: 'Highest-priority warm paths' },
-  { key: 'averageScore', label: 'Average final score', icon: Target, score: true, note: 'Current candidate quality signal' },
-  { key: 'strongRelationships', label: 'Strong relationships', icon: Star, note: 'Best relationship strength matches' },
-  { key: 'highRecommendations', label: 'High recommendations', icon: Award, note: 'Candidates marked Strong' },
-]
+const metricIcons = { activity: Activity, users: Users, trophy: Trophy, target: Target, star: Star }
 
 export function Overview() {
   const { data, error, loading, lastRefreshed, refresh } = useAsyncData(getDashboardStats, [])
+  const { dashboardTheme } = useOutletContext() || {}
   usePageMeta(lastRefreshed, refresh)
-  useWorkflowCompletionRefresh(refresh)
+  useWorkflowCompletionRefresh(refresh, { refreshEveryChange: dashboardTheme === 'dark' })
+
+  if (dashboardTheme === 'dark') {
+    return <DarkDashboardPage data={data} error={error} loading={loading} onRetry={refresh} />
+  }
 
   if (loading) {
     return (
@@ -52,14 +52,14 @@ export function Overview() {
       </section>
 
       <section className="grid stats-grid" aria-label="Dashboard summary">
-        {statCards.map((item) => {
-          const Icon = item.icon
+        {DASHBOARD_METRIC_DEFINITIONS.map((item) => {
+          const Icon = metricIcons[item.icon]
           const value = totals[item.key]
           return (
             <article className="card stat-card" key={item.key}>
               <Icon className="stat-icon" size={22} aria-hidden="true" />
               <span>{item.label}</span>
-              <strong>{item.score ? formatScore(value) : formatNumber(value)}</strong>
+              <strong>{formatDashboardMetricValue(value, item)}</strong>
               <small>{item.note}</small>
             </article>
           )
@@ -79,8 +79,8 @@ export function Overview() {
         </div>
         {data.topRows?.length ? (
           <div className="grid cards-grid">
-            {data.topRows.map((candidate, index) => (
-              <CandidateCard candidate={candidate} prominent enableReasonFlip key={candidate.id || `${candidate.rank}-${index}`} />
+            {data.topRows.map((candidate) => (
+              <CandidateCard candidate={candidate} prominent enableReasonFlip key={`${candidate.workflow_run_id}:${candidate.candidate_id || candidate.id}`} />
             ))}
           </div>
         ) : (

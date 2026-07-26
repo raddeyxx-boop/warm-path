@@ -8,7 +8,14 @@ export function ProtectedRoute() {
 
   if (auth.isLoading) return <LoadingState label="Checking your session..." />
   if (!auth.isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />
-  if (!auth.profile?.is_active) return <Navigate to="/login" replace />
+  if (!auth.profile && !auth.authError) {
+    return <LoadingState label="Loading your account..." />
+  }
+  if (!auth.profile) return <Navigate to="/unauthorized" replace />
+  if (!auth.profile.is_active) return <Navigate to="/account-rejected" replace />
+  if (auth.profile.approval_status === 'pending') return <Navigate to="/approval-pending" replace />
+  if (auth.profile.approval_status === 'rejected') return <Navigate to="/account-rejected" replace />
+  if (!auth.isApproved) return <Navigate to="/unauthorized" replace />
 
   return <Outlet />
 }
