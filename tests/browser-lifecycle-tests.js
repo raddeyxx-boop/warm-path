@@ -255,6 +255,18 @@ async function run() {
     authPage = new AuthenticationPage({ profileMenu: false });
     await verify(authPage, 45000, { browser: authResources.browser, context: authResources.context });
 
+    authResources = fakeResources();
+    authPage = new AuthenticationPage({
+        shell: true,
+        search: false,
+        navigation: false,
+        profileMenu: false
+    });
+    await verify(authPage, 45000, {
+        browser: authResources.browser,
+        context: authResources.context
+    });
+
     for (const rejectedUrl of ["https://www.linkedin.com/login", "https://www.linkedin.com/authwall"]) {
         authResources = fakeResources();
         authPage = new AuthenticationPage({ url: rejectedUrl });
@@ -330,11 +342,28 @@ async function run() {
     );
 
     authResources = fakeResources();
-    authPage = new AuthenticationPage({ shell: false, search: false, navigation: false });
+    authPage = new AuthenticationPage({
+        shell: false,
+        search: false,
+        navigation: false,
+        profileMenu: false
+    });
     await assert.rejects(
         () => verify(authPage, 45000, { browser: authResources.browser, context: authResources.context }),
         error => error.code === "LINKEDIN_AUTH_INDICATORS_MISSING" &&
             /indicators could not be verified/i.test(error.message)
+    );
+
+    authResources = fakeResources();
+    authPage = new AuthenticationPage();
+    authResources.browser.connected = false;
+    await assert.rejects(
+        () => verify(authPage, 45000, {
+            browser: authResources.browser,
+            context: authResources.context
+        }),
+        error => error.code === "LINKEDIN_PAGE_CLOSED_DURING_AUTH" &&
+            error.details.browser_connected === false
     );
 
     const authenticationLogs = [];

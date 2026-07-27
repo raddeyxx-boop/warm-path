@@ -265,6 +265,30 @@ function authenticationFailure(page, browser, context, lifecycle, code, lastUrl,
     );
 }
 
+function authenticationConfirmedByEvidence(evidence) {
+    const authenticatedEvidenceCount = [
+        evidence.authenticated_shell_found,
+        evidence.search_input_found,
+        evidence.authenticated_navigation_found,
+        evidence.profile_menu_found
+    ].filter(Boolean).length;
+    const negativeAuthState =
+        evidence.sign_in_form_found ||
+        evidence.authwall_found ||
+        evidence.checkpoint_found ||
+        evidence.challenge_found ||
+        evidence.captcha_found ||
+        evidence.security_verification_found ||
+        isLinkedInLoginUrl(evidence.current_url);
+
+    return evidence.safe_url &&
+        evidence.authenticated_shell_found &&
+        authenticatedEvidenceCount >= 1 &&
+        !negativeAuthState &&
+        !evidence.page_closed &&
+        evidence.browser_connected;
+}
+
 async function visibleState(page, selector) {
     const locator = page.locator(selector);
     const count = await locator.count().catch(() => 0);
@@ -343,7 +367,7 @@ async function assertLinkedInAuthenticated(
     console.log("====================================");
     console.log("STEP 3");
     console.log("Verifying LinkedIn session...");
-    console.log("Expected condition: authenticated app shell and search box are visible.");
+    console.log("Expected condition: a stable authenticated app shell with no negative authentication state.");
     console.log("====================================");
 
     await page.waitForLoadState("networkidle", {
@@ -364,15 +388,18 @@ async function assertLinkedInAuthenticated(
         );
     }
 
-    const searchInput = page.locator(AUTHENTICATED_SEARCH_SELECTOR).first();
     if (evidence.sign_in_form_found || evidence.authwall_found ||
         /\/(?:login|uas\/login|authwall|signin)(?:[/?#]|$)/i.test(currentUrl)) {
         throw authenticationFailure(
             page, browser, context, lifecycle, "LINKEDIN_AUTH_REQUIRED", currentUrl, false, evidence
         );
     }
-    if (!evidence.safe_url || !evidence.authenticated_shell_found ||
-        !evidence.search_input_found || !evidence.authenticated_navigation_found) {
+    if (evidence.page_closed || !evidence.browser_connected) {
+        throw authenticationFailure(
+            page, browser, context, lifecycle, "LINKEDIN_PAGE_CLOSED_DURING_AUTH", currentUrl, false, evidence
+        );
+    }
+    if (!authenticationConfirmedByEvidence(evidence)) {
         throw authenticationFailure(
             page, browser, context, lifecycle, "LINKEDIN_AUTH_INDICATORS_MISSING", currentUrl, false, evidence
         );
@@ -380,15 +407,13 @@ async function assertLinkedInAuthenticated(
 
     try {
         await page.waitForFunction(
-            ({ searchSelector, navSelector, unauthenticatedSelector, stabilityWindowMs }) => {
+            ({ unauthenticatedSelector, stabilityWindowMs }) => {
                 const url = window.location.href;
                 const forbiddenUrl = /\/(?:login|checkpoint|challenge|uas\/login|authwall|signin|security-verification|captcha)(?:[/?#]|$)/i
                     .test(url);
                 const authenticated = !forbiddenUrl &&
                     document.visibilityState === "visible" &&
                     Boolean(document.querySelector("main")) &&
-                    Boolean(document.querySelector(searchSelector)) &&
-                    Boolean(document.querySelector(navSelector)) &&
                     !document.querySelector(unauthenticatedSelector);
                 if (!authenticated) {
                     window.__warmPathAuthenticatedSince = 0;
@@ -401,8 +426,6 @@ async function assertLinkedInAuthenticated(
                 return performance.now() - window.__warmPathAuthenticatedSince >= stabilityWindowMs;
             },
             {
-                searchSelector: AUTHENTICATED_SEARCH_SELECTOR,
-                navSelector: AUTHENTICATED_NAV_SELECTOR,
                 unauthenticatedSelector: UNAUTHENTICATED_UI_SELECTOR,
                 stabilityWindowMs: AUTH_STABILITY_WINDOW_MS
             },
@@ -428,14 +451,33 @@ async function assertLinkedInAuthenticated(
                 evidence
             );
         }
-        const probeSucceeded = await searchInput.evaluate(element =>
-            document.contains(element) && !element.disabled && element.getAttribute("type") !== "hidden"
-        );
-        if (!probeSucceeded) {
-            evidence = await collectLinkedInAuthEvidence(page, browser);
-            evidence.session_cookie = sessionCookieEvidence;
+        evidence = await collectLinkedInAuthEvidence(page, browser);
+        evidence.session_cookie = sessionCookieEvidence;
+        const challengeObserved = evidence.checkpoint_found || evidence.challenge_found ||
+            evidence.captcha_found || evidence.security_verification_found;
+        if (challengeObserved) {
             throw authenticationFailure(
-                page, browser, context, lifecycle, "LINKEDIN_AUTH_INDICATORS_MISSING", currentUrl, false, evidence
+                page, browser, context, lifecycle, "LINKEDIN_CHALLENGE_REQUIRED", currentUrl, true, evidence
+            );
+        }
+        if (evidence.sign_in_form_found || evidence.authwall_found ||
+            /\/(?:login|uas\/login|authwall|signin)(?:[/?#]|$)/i.test(evidence.current_url)) {
+            throw authenticationFailure(
+                page, browser, context, lifecycle, "LINKEDIN_AUTH_REQUIRED", currentUrl, false, evidence
+            );
+        }
+        if (!authenticationConfirmedByEvidence(evidence)) {
+            throw authenticationFailure(
+                page,
+                browser,
+                context,
+                lifecycle,
+                evidence.page_closed || !evidence.browser_connected
+                    ? "LINKEDIN_PAGE_CLOSED_DURING_AUTH"
+                    : "LINKEDIN_AUTH_INDICATORS_MISSING",
+                currentUrl,
+                false,
+                evidence
             );
         }
     } catch (error) {
@@ -652,3 +694,4 @@ module.exports.assertLinkedInAuthenticated = assertLinkedInAuthenticated;
 module.exports.isLinkedInLoginUrl = isLinkedInLoginUrl;
 module.exports.LinkedInAuthenticationError = LinkedInAuthenticationError;
 module.exports.collectLinkedInAuthEvidence = collectLinkedInAuthEvidence;
+module.exports.authenticationConfirmedByEvidence = authenticationConfirmedByEvidence;
