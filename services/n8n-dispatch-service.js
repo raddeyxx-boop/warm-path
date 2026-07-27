@@ -118,7 +118,10 @@ async function dispatchCompletedExtraction({ supabase, result, searchHash, cache
             n8n_dispatch_error: String(error.message).slice(0, 500),
             current_step: "processing_failed", current_message: "Processing failed after extraction."
         });
-        throw new Error(`Processing failed after extraction: ${error.message}`);
+        const dispatchError = new Error(`Processing failed after extraction: ${error.message}`);
+        dispatchError.code = error.code || "N8N_DISPATCH_FAILED";
+        dispatchError.cause = error;
+        throw dispatchError;
     }
 }
 

@@ -5,7 +5,10 @@ const {
     serializeFinalProfiles,
     validateRelationshipEvidence
 } = require("../utils/FinalProfileSerializer");
-const { sendExtractionToN8n } = require("../services/n8n-webhook-client");
+const {
+    sanitizeDispatchError,
+    sendExtractionToN8n
+} = require("../services/n8n-webhook-client");
 const { createServiceSupabaseClient } = require("../services/supabase-server");
 
 const DATA_DIR = path.resolve(process.env.WARM_PATH_RUN_DIR || path.join(__dirname, "..", "data"));
@@ -329,11 +332,7 @@ async function sendToN8N() {
 
 if (require.main === module) {
     sendToN8N().catch(error => {
-        console.error("send-to-n8n failed", {
-            name: error?.name, message: error?.message, code: error?.code,
-            status: error?.status, statusText: error?.statusText,
-            cause: error?.cause, responseBody: error?.responseBody, stack: error?.stack
-        });
+        console.error("send-to-n8n failed", sanitizeDispatchError(error));
         process.exitCode = 1;
     });
 }

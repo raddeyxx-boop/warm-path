@@ -1,7 +1,11 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
-const { sendExtractionToN8n } = require("../services/n8n-webhook-client");
+const {
+    resolveWebhookUrl,
+    sanitizeDispatchError,
+    sendExtractionToN8n: sendClient
+} = require("../services/n8n-webhook-client");
 const { buildWebhookPayload } = require("../services/n8n-dispatch-service");
 const { buildFinalExtractionPayload, validateRelationshipEvidence } = require("../scripts/send-to-n8n");
 
@@ -24,6 +28,15 @@ function basePayload() {
         extraction: { connections: [], candidates: [] },
         metadata: {}
     };
+}
+
+function sendExtractionToN8n(options) {
+    return sendClient({
+        environment: "test",
+        dnsLookup: async () => ({ address: "203.0.113.10", family: 4 }),
+        logger: { log() {}, error() {} },
+        ...options
+    });
 }
 
 async function run() {
@@ -207,6 +220,109 @@ async function run() {
         fetchImpl: async () => { missingUrlCalls += 1; }
     }), /N8N_EXTRACTION_WEBHOOK_URL is missing/);
     assert.strictEqual(missingUrlCalls, 0);
+
+    await assert.rejects(() => sendExtractionToN8n({
+        webhookUrl: "not a URL",
+        payload: basePayload(),
+        fetchImpl: async () => response(200, { accepted: true })
+    }), error => error.code === "N8N_WEBHOOK_URL_INVALID");
+    assert.throws(
+        () => resolveWebhookUrl("http://localhost:5678/webhook/warm-path", { environment: "production" }),
+        error => error.code === "N8N_WEBHOOK_URL_NOT_PUBLIC"
+    );
+
+    for (const [status, code] of [
+        [404, "N8N_WEBHOOK_NOT_FOUND"],
+        [403, "N8N_WEBHOOK_ACCESS_DENIED"],
+        [413, "N8N_WEBHOOK_PAYLOAD_TOO_LARGE"]
+    ]) {
+        let callsForStatus = 0;
+        await assert.rejects(() => sendExtractionToN8n({
+            webhookUrl: "https://n8n.example.test/webhook/warm-path",
+            payload: basePayload(),
+            fetchImpl: async () => {
+                callsForStatus += 1;
+                return response(status, { accepted: false });
+            }
+        }), error => error.code === code);
+        assert.strictEqual(callsForStatus, 1);
+    }
+
+    for (const [networkCode, expectedCode] of [
+        ["ENOTFOUND", "N8N_WEBHOOK_DNS_FAILURE"],
+        ["ECONNREFUSED", "N8N_WEBHOOK_CONNECTION_REFUSED"],
+        ["ECONNRESET", "N8N_WEBHOOK_CONNECTION_RESET"],
+        ["ETIMEDOUT", "N8N_WEBHOOK_TIMEOUT"]
+    ]) {
+        await assert.rejects(() => sendExtractionToN8n({
+            webhookUrl: "https://n8n.example.test/webhook/warm-path",
+            payload: basePayload(),
+            maxRetries: 1,
+            fetchImpl: async () => {
+                const cause = new Error(`${networkCode} synthetic network failure`);
+                cause.code = networkCode;
+                cause.hostname = "n8n.example.test";
+                const error = new TypeError("fetch failed", { cause });
+                throw error;
+            }
+        }), error => error.code === expectedCode && error.cause.code === networkCode);
+    }
+
+    await assert.rejects(() => sendExtractionToN8n({
+        webhookUrl: "https://n8n.example.test/webhook/warm-path",
+        payload: basePayload(),
+        maxRetries: 1,
+        fetchImpl: async () => { throw new TypeError("fetch failed"); }
+    }), error => error.code === "N8N_WEBHOOK_TRANSPORT_FAILURE" && !error.cause);
+
+    const sanitized = sanitizeDispatchError(new TypeError(
+        "fetch failed for https://example.test/webhook/warm-path?token=secret",
+        { cause: Object.assign(new Error("getaddrinfo ENOTFOUND example.test"), { code: "ENOTFOUND" }) }
+    ));
+    assert.strictEqual(JSON.stringify(sanitized).includes("token=secret"), false);
+    assert.strictEqual(sanitized.cause.code, "ENOTFOUND");
+
+    const loggedFailures = [];
+    const signals = [];
+    let clearedTimers = 0;
+    await assert.rejects(() => sendClient({
+        webhookUrl: "https://n8n.example.test/webhook/warm-path?token=secret",
+        environment: "test",
+        payload: { ...basePayload(), private_payload_marker: "must-not-be-logged" },
+        maxRetries: 2,
+        sleep: async () => {},
+        dnsLookup: async () => ({ address: "203.0.113.10", family: 4 }),
+        logger: {
+            log() {},
+            error(...args) { loggedFailures.push(args); }
+        },
+        setTimeoutImpl: () => Symbol("timer"),
+        clearTimeoutImpl: () => { clearedTimers += 1; },
+        fetchImpl: async (_url, options) => {
+            signals.push(options.signal);
+            const cause = Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+            throw new TypeError("fetch failed", { cause });
+        }
+    }));
+    assert.strictEqual(signals.length, 2);
+    assert.notStrictEqual(signals[0], signals[1]);
+    assert.strictEqual(clearedTimers, 2);
+    const loggedText = JSON.stringify(loggedFailures);
+    assert.strictEqual(loggedText.includes("token=secret"), false);
+    assert.strictEqual(loggedText.includes("must-not-be-logged"), false);
+
+    let successTimerClears = 0;
+    await sendClient({
+        webhookUrl: "https://n8n.example.test/webhook/warm-path",
+        environment: "test",
+        payload: basePayload(),
+        dnsLookup: async () => ({ address: "203.0.113.10", family: 4 }),
+        logger: { log() {}, error() {} },
+        setTimeoutImpl: () => Symbol("success-timer"),
+        clearTimeoutImpl: () => { successTimerClears += 1; },
+        fetchImpl: async () => response(200, { accepted: true })
+    });
+    assert.strictEqual(successTimerClears, 1);
 
     console.log("n8n webhook client tests passed.");
 }
