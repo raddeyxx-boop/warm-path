@@ -1,0 +1,15 @@
+{
+  "cookies": [
+    {
+      "name": "li_at",
+      "value": "test-secret-value",
+      "domain": ".linkedin.com",
+      "path": "/",
+      "expires": 4102444800,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    }
+  ],
+  "origins": []
+}

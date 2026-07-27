@@ -2,6 +2,11 @@ const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 const { LINKEDIN_SESSION_PATH } = require("../config/linkedin-session");
+const startBrowser = require("../services/browser");
+const {
+  validateStorageState,
+  writeStorageStateAtomic
+} = require("../services/linkedin-session-state");
 
 delete process.env.PWDEBUG;
 delete process.env.PWDEBUGIMPL;
@@ -44,21 +49,15 @@ delete process.env.PWDEBUGIMPL;
       process.stdin.once("data", resolve);
     });
 
-    const currentUrl = page.url();
+    await startBrowser.assertLinkedInAuthenticated(
+      page,
+      45000,
+      { browser, context }
+    );
 
-    if (
-      currentUrl.includes("/login") ||
-      currentUrl.includes("/checkpoint") ||
-      currentUrl.includes("/challenge")
-    ) {
-      throw new Error(
-        `LinkedIn login is not complete. Current URL: ${currentUrl}`
-      );
-    }
-
-    await context.storageState({
-      path: LINKEDIN_SESSION_PATH
-    });
+    const savedState = await context.storageState();
+    validateStorageState(savedState);
+    writeStorageStateAtomic(LINKEDIN_SESSION_PATH, savedState);
 
     console.log("");
     console.log("LinkedIn session saved successfully.");
@@ -66,7 +65,7 @@ delete process.env.PWDEBUGIMPL;
   } catch (error) {
     console.error("");
     console.error("Failed to save LinkedIn session:");
-    console.error(error instanceof Error ? error.message : error);
+    console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   } finally {
     if (browser) {

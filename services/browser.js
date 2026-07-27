@@ -2,6 +2,10 @@ const fs = require("fs");
 const path = require("path");
 const { chromium } = require("playwright");
 const { LINKEDIN_SESSION_PATH } = require("../config/linkedin-session");
+const {
+    cookieExpired,
+    validateStorageState
+} = require("./linkedin-session-state");
 
 delete process.env.PWDEBUG;
 delete process.env.PWDEBUGIMPL;
@@ -29,36 +33,6 @@ const PROFILE_MENU_SELECTOR = [
     'button[aria-label*="profile" i]',
     '[data-control-name="identity_profile_photo"]'
 ].join(", ");
-
-const context = await browser.newContext({
-    ...(config.contextOptions || {}),
-    storageState: sessionPath,
-    viewport: { width: 1440, height: 900 }
-});
-
-
-
-const linkedInCookies = await context.cookies("https://www.linkedin.com");
-
-const requiredCookieNames = ["li_at", "JSESSIONID"];
-
-console.log("[LINKEDIN_SESSION_DIAGNOSTIC]", {
-    session_path: sessionPath,
-    total_cookies: linkedInCookies.length,
-    cookie_names: linkedInCookies.map(cookie => cookie.name),
-    required_cookies_found: requiredCookieNames.filter(name =>
-        linkedInCookies.some(cookie =>
-            cookie.name === name && Boolean(cookie.value)
-        )
-    ),
-    required_cookies_missing: requiredCookieNames.filter(name =>
-        !linkedInCookies.some(cookie =>
-            cookie.name === name && Boolean(cookie.value)
-        )
-    )
-});
-
-const page = await context.newPage();
 
 const SIGN_IN_FORM_SELECTOR = [
     'form[action*="login" i]',
@@ -214,6 +188,34 @@ function assertSessionExists(sessionPath) {
     }
 }
 
+function readAndValidateSession(sessionPath) {
+    let parsedSession;
+    try {
+        parsedSession = JSON.parse(fs.readFileSync(sessionPath, "utf8"));
+    } catch {
+        throw new LinkedInAuthenticationError(
+            "LINKEDIN_SESSION_ARTIFACT_INVALID",
+            authenticationMessage("LINKEDIN_SESSION_ARTIFACT_INVALID"),
+            { session_path: sessionPath, reason: "Session file is not valid JSON." }
+        );
+    }
+
+    try {
+        return validateStorageState(parsedSession);
+    } catch (error) {
+        const code = error?.code || "LINKEDIN_SESSION_ARTIFACT_INVALID";
+        throw new LinkedInAuthenticationError(
+            code,
+            authenticationMessage(code),
+            {
+                session_path: sessionPath,
+                reason: error instanceof Error ? error.message : String(error),
+                ...(error?.details || {})
+            }
+        );
+    }
+}
+
 function isLinkedInLoginUrl(url) {
     return /\/(?:login|checkpoint|challenge|uas\/login|authwall|signin|security-verification|captcha)(?:[/?#]|$)/i
         .test(String(url || ""));
@@ -228,6 +230,15 @@ function authenticationMessage(code) {
     }
     if (code === "LINKEDIN_SESSION_ARTIFACT_MISSING") {
         return "The saved LinkedIn session could not be loaded. Sign in through the supported login flow before retrying.";
+    }
+    if (code === "LINKEDIN_SESSION_ARTIFACT_INVALID") {
+        return "The saved LinkedIn session is invalid. Create and deploy a fresh session before retrying.";
+    }
+    if (code === "LINKEDIN_SESSION_COOKIE_MISSING") {
+        return "The saved LinkedIn session is missing its required authentication cookie. Sign in again before retrying.";
+    }
+    if (code === "LINKEDIN_SESSION_COOKIE_EXPIRED") {
+        return "The saved LinkedIn session cookie has expired. Sign in again before retrying.";
     }
     return "Your LinkedIn session is no longer active. Open LinkedIn, sign in again, and retry the search.";
 }
@@ -307,7 +318,11 @@ async function collectLinkedInAuthEvidence(page, browser) {
     };
 }
 
-async function assertLinkedInAuthenticated(page, navigationTimeout, { browser, context, lifecycle } = {}) {
+async function assertLinkedInAuthenticated(
+    page,
+    navigationTimeout,
+    { browser, context, lifecycle, sessionCookieEvidence } = {}
+) {
     page.setDefaultNavigationTimeout(navigationTimeout);
 
     console.log("====================================");
@@ -339,6 +354,7 @@ async function assertLinkedInAuthenticated(page, navigationTimeout, { browser, c
 
     let currentUrl = safePageUrl(page, targetUrl);
     let evidence = await collectLinkedInAuthEvidence(page, browser);
+    evidence.session_cookie = sessionCookieEvidence;
     console.log("[LINKEDIN_AUTH_CONDITIONS]", evidence);
 
     if (evidence.checkpoint_found || evidence.challenge_found || evidence.captcha_found ||
@@ -393,14 +409,31 @@ async function assertLinkedInAuthenticated(page, navigationTimeout, { browser, c
             { timeout: 8000, polling: 100 }
         );
         currentUrl = safePageUrl(page, currentUrl);
-        if (page.isClosed() || browser && !browser.isConnected() || isLinkedInLoginUrl(currentUrl)) {
+        if (page.isClosed() || browser && !browser.isConnected()) {
             throw authenticationFailure(page, browser, context, lifecycle, "LINKEDIN_PAGE_CLOSED_DURING_AUTH", currentUrl);
+        }
+        if (isLinkedInLoginUrl(currentUrl)) {
+            evidence = await collectLinkedInAuthEvidence(page, browser);
+            evidence.session_cookie = sessionCookieEvidence;
+            const challengeObserved = evidence.checkpoint_found || evidence.challenge_found ||
+                evidence.captcha_found || evidence.security_verification_found;
+            throw authenticationFailure(
+                page,
+                browser,
+                context,
+                lifecycle,
+                challengeObserved ? "LINKEDIN_CHALLENGE_REQUIRED" : "LINKEDIN_AUTH_REQUIRED",
+                currentUrl,
+                challengeObserved,
+                evidence
+            );
         }
         const probeSucceeded = await searchInput.evaluate(element =>
             document.contains(element) && !element.disabled && element.getAttribute("type") !== "hidden"
         );
         if (!probeSucceeded) {
             evidence = await collectLinkedInAuthEvidence(page, browser);
+            evidence.session_cookie = sessionCookieEvidence;
             throw authenticationFailure(
                 page, browser, context, lifecycle, "LINKEDIN_AUTH_INDICATORS_MISSING", currentUrl, false, evidence
             );
@@ -411,6 +444,7 @@ async function assertLinkedInAuthenticated(page, navigationTimeout, { browser, c
         const browserDisconnected = browser && !browser.isConnected();
         if (!pageClosed && !browserDisconnected) {
             evidence = await collectLinkedInAuthEvidence(page, browser);
+            evidence.session_cookie = sessionCookieEvidence;
             currentUrl = evidence.current_url || currentUrl;
         }
         const challengeObserved = evidence.checkpoint_found || evidence.challenge_found ||
@@ -461,23 +495,111 @@ async function startBrowser(options = {}) {
                 { session_path: sessionPath, reason: error.message }
             );
         }
+        readAndValidateSession(sessionPath);
         const launchOptions = config.launchOptions || {};
-        const headlessLaunchArgs = (launchOptions.args || [])
+        const {
+            headless: ignoredHeadless,
+            devtools: ignoredDevtools,
+            slowMo: ignoredSlowMo,
+            args: configuredLaunchArgs,
+            ...safeLaunchOptions
+        } = launchOptions;
+        const headlessLaunchArgs = (configuredLaunchArgs || [])
             .filter(argument => !/^--(?:auto-open-devtools-for-tabs|remote-debugging|window-size|window-position|start-maximized)/i.test(argument));
 
         const chromiumImpl = config.chromiumImpl || chromium;
-     browser = await chromiumImpl.launch({
-    ...launchOptions,
-    ...(config.channel ? { channel: config.channel } : {}),
-    headless: true,
-    devtools: false,
-    args: headlessLaunchArgs
-});
+        browser = await chromiumImpl.launch({
+            ...safeLaunchOptions,
+            ...(config.channel ? { channel: config.channel } : {}),
+            headless: true,
+            devtools: false,
+            args: headlessLaunchArgs
+        });
         const context = await browser.newContext({
             ...(config.contextOptions || {}),
             storageState: sessionPath,
             viewport: { width: 1440, height: 900 }
         });
+
+        const diagnosticLog = config.lifecycleLog || console.log;
+        let linkedInCookies;
+        let cookieInspectionError;
+        try {
+            linkedInCookies = await context.cookies("https://www.linkedin.com");
+        } catch {
+            linkedInCookies = null;
+            cookieInspectionError = "Unable to inspect context cookies.";
+        }
+        const requiredCookieNames = ["li_at"];
+        const requiredCookiesFound = requiredCookieNames.filter(name =>
+            linkedInCookies?.some(cookie => cookie.name === name && Boolean(cookie.value))
+        );
+        const requiredCookiesMissing = requiredCookieNames.filter(name =>
+            linkedInCookies && !linkedInCookies.some(cookie =>
+                cookie.name === name && Boolean(cookie.value)
+            )
+        );
+        const liAt = linkedInCookies?.find(cookie =>
+            cookie.name === "li_at" && Boolean(cookie.value)
+        );
+        const sessionCookieEvidence = {
+            cookie_inspection_succeeded: Boolean(linkedInCookies),
+            required_cookie_present_before_navigation: Boolean(liAt),
+            required_cookie_expired_before_navigation: Boolean(liAt && cookieExpired(liAt))
+        };
+
+        let sessionFileSize = 0;
+        try {
+            sessionFileSize = fs.statSync(sessionPath).size;
+        } catch {
+            sessionFileSize = 0;
+        }
+        try {
+            diagnosticLog("[LINKEDIN_SESSION_DIAGNOSTIC]", {
+                session_path: sessionPath,
+                session_file_exists: fs.existsSync(sessionPath),
+                session_file_size: sessionFileSize,
+                cookie_inspection_succeeded: Boolean(linkedInCookies),
+                cookie_inspection_error: cookieInspectionError || null,
+                total_linkedin_cookies: linkedInCookies?.length ?? null,
+                cookie_names: linkedInCookies?.map(cookie => cookie.name).sort() || [],
+                required_cookies_found: requiredCookiesFound,
+                required_cookies_missing: requiredCookiesMissing,
+                cookie_metadata: linkedInCookies?.map(cookie => ({
+                    name: cookie.name,
+                    domain: cookie.domain,
+                    path: cookie.path,
+                    expires: cookie.expires,
+                    expired: cookieExpired(cookie),
+                    secure: cookie.secure,
+                    httpOnly: cookie.httpOnly,
+                    sameSite: cookie.sameSite,
+                    has_value: Boolean(cookie.value)
+                })) || []
+            });
+        } catch {
+            // Diagnostics must not determine whether a valid session can proceed.
+        }
+
+        if (linkedInCookies && !liAt) {
+            throw new LinkedInAuthenticationError(
+                "LINKEDIN_SESSION_COOKIE_MISSING",
+                authenticationMessage("LINKEDIN_SESSION_COOKIE_MISSING"),
+                { session_path: sessionPath, ...sessionCookieEvidence }
+            );
+        }
+        if (cookieExpired(liAt)) {
+            throw new LinkedInAuthenticationError(
+                "LINKEDIN_SESSION_COOKIE_EXPIRED",
+                authenticationMessage("LINKEDIN_SESSION_COOKIE_EXPIRED"),
+                {
+                    session_path: sessionPath,
+                    cookie_name: "li_at",
+                    expires: liAt.expires,
+                    ...sessionCookieEvidence
+                }
+            );
+        }
 
         const page = await context.newPage();
         page.setDefaultTimeout(config.navigationTimeout);
@@ -494,7 +616,7 @@ async function startBrowser(options = {}) {
             await (config.authVerifier || assertLinkedInAuthenticated)(
                 page,
                 config.navigationTimeout,
-                { browser, context, lifecycle }
+                { browser, context, lifecycle, sessionCookieEvidence }
             );
         }
 

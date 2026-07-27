@@ -19,8 +19,27 @@ class FakePage extends EventEmitter {
 }
 
 class FakeContext extends EventEmitter {
-    constructor(page) { super(); this.page = page; this.closed = false; }
+    constructor(page, { cookies, cookieError } = {}) {
+        super();
+        this.page = page;
+        this.closed = false;
+        this.cookieError = cookieError;
+        this.cookieList = cookies || [{
+            name: "li_at",
+            value: "test-secret-value",
+            domain: ".linkedin.com",
+            path: "/",
+            expires: Math.floor(Date.now() / 1000) + 3600,
+            httpOnly: true,
+            secure: true,
+            sameSite: "None"
+        }];
+    }
     async newPage() { return this.page; }
+    async cookies() {
+        if (this.cookieError) throw this.cookieError;
+        return this.cookieList;
+    }
 }
 
 class FakeBrowser extends EventEmitter {
@@ -45,9 +64,9 @@ class FakeBrowser extends EventEmitter {
     }
 }
 
-function fakeResources() {
-    const page = new FakePage();
-    const context = new FakeContext(page);
+function fakeResources(options = {}) {
+    const page = options.page || new FakePage();
+    const context = new FakeContext(page, options);
     const browser = new FakeBrowser(context);
     return { browser, context, page };
 }
@@ -57,6 +76,7 @@ class AuthenticationPage extends EventEmitter {
         url = "https://www.linkedin.com/feed/",
         unauthenticatedUi = false,
         closeDuringVerification = false,
+        redirectDuringVerification = "",
         shell = true,
         search = true,
         navigation = true,
@@ -66,6 +86,7 @@ class AuthenticationPage extends EventEmitter {
         this.currentUrl = url;
         this.unauthenticatedUi = unauthenticatedUi;
         this.closeDuringVerification = closeDuringVerification;
+        this.redirectDuringVerification = redirectDuringVerification;
         this.shell = shell;
         this.search = search;
         this.navigation = navigation;
@@ -74,6 +95,7 @@ class AuthenticationPage extends EventEmitter {
     }
     isClosed() { return this.closed; }
     url() { return this.currentUrl; }
+    setDefaultTimeout() {}
     setDefaultNavigationTimeout() {}
     async goto() { return null; }
     async waitForLoadState() {}
@@ -107,6 +129,9 @@ class AuthenticationPage extends EventEmitter {
             this.emit("close");
             throw new Error("page.waitForFunction: Target page, context or browser has been closed");
         }
+        if (this.redirectDuringVerification) {
+            this.currentUrl = this.redirectDuringVerification;
+        }
         return true;
     }
 }
@@ -118,7 +143,7 @@ async function run() {
     const loginSource = fs.readFileSync(path.join(__dirname, "..", "scripts", "login.js"), "utf8");
     assert.match(loginSource, /LINKEDIN_SESSION_PATH/);
 
-    const sessionPath = __filename;
+    const sessionPath = path.join(__dirname, "fixtures", "linkedin-session.json");
     let resources = fakeResources();
     let launchOptions;
     let authenticationVerified = false;
@@ -157,6 +182,45 @@ async function run() {
     assert.strictEqual(resources.browser.closeCalls, 1);
     assert.strictEqual(await session.cleanup("duplicate_cleanup"), false);
     assert.strictEqual(resources.browser.closeCalls, 1);
+
+    resources = fakeResources({ cookies: [] });
+    await assert.rejects(
+        () => startBrowser({
+            sessionPath,
+            chromiumImpl: { launch: async () => resources.browser },
+            lifecycleLog: () => {}
+        }),
+        error => error.code === "LINKEDIN_SESSION_COOKIE_MISSING"
+    );
+    assert.strictEqual(resources.browser.closeCalls, 1);
+
+    resources = fakeResources({ cookieError: new Error("synthetic cookie inspection failure") });
+    let proceededAfterCookieInspectionFailure = false;
+    session = await startBrowser({
+        sessionPath,
+        chromiumImpl: { launch: async () => resources.browser },
+        authVerifier: async () => {
+            proceededAfterCookieInspectionFailure = true;
+        },
+        lifecycleLog: () => {}
+    });
+    assert.strictEqual(proceededAfterCookieInspectionFailure, true);
+    await session.cleanup("test_completed");
+
+    let launchAttempted = false;
+    await assert.rejects(
+        () => startBrowser({
+            sessionPath,
+            chromiumImpl: {
+                launch: async () => {
+                    launchAttempted = true;
+                    throw new Error("synthetic launch failure");
+                }
+            }
+        }),
+        /Browser startup failed: synthetic launch failure/
+    );
+    assert.strictEqual(launchAttempted, true);
 
     resources = fakeResources();
     await assert.rejects(() => startBrowser({
@@ -209,6 +273,52 @@ async function run() {
         await assert.rejects(
             () => verify(authPage, 45000, { browser: authResources.browser, context: authResources.context }),
             error => error.code === "LINKEDIN_CHALLENGE_REQUIRED"
+        );
+    }
+
+    authResources = fakeResources({
+        page: new AuthenticationPage({
+            url: "https://www.linkedin.com/checkpoint/challenge/",
+            unauthenticatedUi: true
+        })
+    });
+    await assert.rejects(
+        () => verify(authResources.page, 45000, {
+            browser: authResources.browser,
+            context: authResources.context
+        }),
+        error => error.code === "LINKEDIN_CHALLENGE_REQUIRED"
+    );
+
+    const redirectedPage = new AuthenticationPage({
+        url: "https://www.linkedin.com/uas/login?session_redirect=%2Ffeed%2F",
+        unauthenticatedUi: true
+    });
+    authResources = fakeResources({ page: redirectedPage });
+    await assert.rejects(
+        () => startBrowser({
+            sessionPath,
+            chromiumImpl: { launch: async () => authResources.browser },
+            lifecycleLog: () => {}
+        }),
+        error => error.code === "LINKEDIN_AUTH_REQUIRED" &&
+            error.details.authentication_evidence.session_cookie
+                .required_cookie_present_before_navigation === true
+    );
+    assert.strictEqual(authResources.browser.closeCalls, 1);
+
+    for (const [redirectUrl, expectedCode] of [
+        ["https://www.linkedin.com/uas/login?session_redirect=%2Ffeed%2F", "LINKEDIN_AUTH_REQUIRED"],
+        ["https://www.linkedin.com/checkpoint/challenge/", "LINKEDIN_CHALLENGE_REQUIRED"]
+    ]) {
+        authResources = fakeResources();
+        authPage = new AuthenticationPage({ redirectDuringVerification: redirectUrl });
+        await assert.rejects(
+            () => verify(authPage, 45000, {
+                browser: authResources.browser,
+                context: authResources.context
+            }),
+            error => error.code === expectedCode
         );
     }
 

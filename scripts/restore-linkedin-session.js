@@ -1,66 +1,49 @@
 const fs = require("fs");
-const path = require("path");
 const { LINKEDIN_SESSION_PATH } = require("../config/linkedin-session");
-
-
+const {
+  safeStorageStateSummary,
+  validateStorageState,
+  writeStorageStateAtomic
+} = require("../services/linkedin-session-state");
 
 console.log("[LINKEDIN_SESSION_RESTORE] started", {
   cwd: process.cwd(),
   configured_path: LINKEDIN_SESSION_PATH,
-  has_base64: Boolean(process.env.LINKEDIN_SESSION_BASE64),
-  base64_length: process.env.LINKEDIN_SESSION_BASE64?.length || 0
+  has_base64: Boolean(process.env.LINKEDIN_SESSION_BASE64)
 });
 
 function restoreLinkedInSession() {
   const sessionBase64 = process.env.LINKEDIN_SESSION_BASE64;
 
   if (!sessionBase64) {
-    console.log(
-      "LINKEDIN_SESSION_BASE64 is not configured. Existing local session will be used if available."
-    );
+    console.log("[LINKEDIN_SESSION_RESTORE]", {
+      status: "skipped",
+      reason: "environment_not_configured",
+      session_path: LINKEDIN_SESSION_PATH,
+      local_session_exists: fs.existsSync(LINKEDIN_SESSION_PATH)
+    });
     return;
   }
 
   try {
-    const sessionDirectory = path.dirname(LINKEDIN_SESSION_PATH);
-
-    fs.mkdirSync(sessionDirectory, {
-      recursive: true
-    });
-
     const decodedSession = Buffer.from(
       sessionBase64.trim(),
       "base64"
     ).toString("utf8");
 
-    const parsedSession = JSON.parse(decodedSession);
+    const parsedSession = validateStorageState(JSON.parse(decodedSession));
 
-    if (
-      !parsedSession ||
-      !Array.isArray(parsedSession.cookies) ||
-      !Array.isArray(parsedSession.origins)
-    ) {
-      throw new Error(
-        "Decoded LinkedIn session does not have a valid Playwright storage-state structure."
-      );
-    }
+    writeStorageStateAtomic(LINKEDIN_SESSION_PATH, parsedSession);
 
-    fs.writeFileSync(
-      LINKEDIN_SESSION_PATH,
-      JSON.stringify(parsedSession, null, 2),
-      {
-        encoding: "utf8",
-        mode: 0o600
-      }
-    );
-
-    console.log("LinkedIn session restored successfully.", {
+    console.log("[LINKEDIN_SESSION_RESTORE]", {
+      status: "restored",
       session_path: LINKEDIN_SESSION_PATH,
-      cookies: parsedSession.cookies.length,
-      origins: parsedSession.origins.length
+      ...safeStorageStateSummary(parsedSession)
     });
   } catch (error) {
-    console.error("Failed to restore LinkedIn session.", {
+    console.error("[LINKEDIN_SESSION_RESTORE]", {
+      status: "failed",
+      code: error?.code || "LINKEDIN_SESSION_ARTIFACT_INVALID",
       session_path: LINKEDIN_SESSION_PATH,
       reason: error instanceof Error ? error.message : String(error)
     });
