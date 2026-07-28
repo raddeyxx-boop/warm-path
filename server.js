@@ -4,8 +4,12 @@ const path = require("path");
 const express = require("express");
 const { createStartSearchHandler } = require("./services/search-api");
 const { recoverAbandonedSearches } = require("./services/search-recovery");
-const { failActiveExecutions } = require("./services/playwright-search-runner");
+const {
+    activeExecutions,
+    failActiveExecutions
+} = require("./services/playwright-search-runner");
 const { createStopWorkflowHandler, createDeleteWorkflowHandler } = require("./services/workflow-api");
+const { LINKEDIN_SESSION_PATH } = require("./config/linkedin-session");
 
 const app = express();
 
@@ -18,8 +22,6 @@ const MUTUAL_DETAILS = path.join(
     "data",
     "mutual-details.json"
 );
-app.use(express.json());
-
 const PORT = process.env.PORT || 3000;
 let activeRun = null;
 const recoveryState = { ready: false, error: null };
@@ -31,29 +33,82 @@ const DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173"
 ];
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
+function normalizeOrigin(value) {
+    return String(value || "").trim().replace(/\/+$/, "");
+}
+
+const allowedOrigins = [
+    process.env.CORS_ALLOWED_ORIGINS,
+    process.env.DASHBOARD_ORIGINS
+].filter(Boolean).join(",")
     .split(",")
-    .map(origin => origin.trim())
+    .map(normalizeOrigin)
     .filter(Boolean);
+const dashboardOrigin = normalizeOrigin(process.env.DASHBOARD_ORIGIN);
+if (dashboardOrigin && !allowedOrigins.includes(dashboardOrigin)) {
+    allowedOrigins.push(dashboardOrigin);
+}
 const browserAllowedOrigins = allowedOrigins.length
     ? allowedOrigins
     : DEFAULT_ALLOWED_ORIGINS;
 
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
+app.use((req, _res, next) => {
+    console.log("[LOCAL_WORKER_HTTP_REQUEST]", {
+        method: req.method,
+        path: req.path,
+        origin: req.headers.origin || null,
+        content_type: req.headers["content-type"] || null,
+        content_length_present: Boolean(req.headers["content-length"]),
+        user_agent_present: Boolean(req.headers["user-agent"]),
+        received_at: new Date().toISOString()
+    });
+    return next();
+});
 
-    if (origin && browserAllowedOrigins.includes(origin)) {
+app.use((req, res, next) => {
+    const origin = normalizeOrigin(req.headers.origin);
+    const originPresent = Boolean(origin);
+    const originAllowed = !originPresent || browserAllowedOrigins.includes(origin);
+
+    console.log("[LOCAL_WORKER_CORS]", {
+        request_origin: origin || null,
+        origin_present: originPresent,
+        origin_allowed: originAllowed,
+        method: req.method,
+        path: req.path
+    });
+
+    if (originPresent && originAllowed) {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Vary", "Origin");
         res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+        res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     }
 
+    if (!originAllowed) {
+        return res.status(403).json({
+            ok: false,
+            code: "ORIGIN_NOT_ALLOWED",
+            message: "The request origin is not allowed."
+        });
+    }
     if (req.method === "OPTIONS") {
         return res.sendStatus(204);
     }
 
     return next();
+});
+
+app.use(express.json({ limit: "1mb" }));
+app.use((error, _req, res, next) => {
+    if (!(error instanceof SyntaxError) || error.status !== 400 || !("body" in error)) {
+        return next(error);
+    }
+    return res.status(400).json({
+        ok: false,
+        code: "INVALID_SEARCH_REQUEST",
+        message: "The request body must contain valid JSON."
+    });
 });
 
 function readBearerToken(req) {
@@ -78,9 +133,15 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
-    res.status(recoveryState.ready ? 200 : 503).json({
+    res.status(200).json({
+        ok: true,
         success: true,
-        status: recoveryState.ready ? "Healthy" : "Recovering",
+        service: "warm-path-playwright-worker",
+        status: recoveryState.ready ? "ready" : "recovering",
+        listening: true,
+        busy: activeExecutions.size > 0,
+        session_file_exists: fs.existsSync(LINKEDIN_SESSION_PATH),
+        n8n_webhook_configured: Boolean(process.env.N8N_EXTRACTION_WEBHOOK_URL),
         recovery_error: recoveryState.error ? recoveryState.error.code || "RECOVERY_FAILED" : null,
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
@@ -246,7 +307,15 @@ app.use((req, res) => {
 
 function startServer(options = {}) {
 const recover = options.recoverAbandonedSearches || recoverAbandonedSearches;
-const server = app.listen(PORT, "0.0.0.0", () => {
+const exit = options.exit || (code => { process.exitCode = code; });
+let listenFailureHandled = false;
+const server = app.listen(PORT, "0.0.0.0", error => {
+    if (error) {
+        listenFailureHandled = true;
+        console.error("SERVER ERROR:", error);
+        exit(1);
+        return;
+    }
         console.log("");
     console.log("========================================");
     console.log(" LinkedIn Warm Path Finder API");
@@ -255,6 +324,10 @@ const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(` Health : http://localhost:${PORT}/health`);
     console.log(` Run API: POST http://localhost:${PORT}/run`);
     console.log(` Search API: POST http://localhost:${PORT}/api/searches/start`);
+    console.log(" Listening:", server.listening);
+    console.log(" Dashboard origin configured:", browserAllowedOrigins.length > 0);
+    console.log(" n8n webhook configured:", Boolean(process.env.N8N_EXTRACTION_WEBHOOK_URL));
+    console.log(" Session file exists:", fs.existsSync(LINKEDIN_SESSION_PATH));
     console.log("========================================");
     void recover().then(() => {
         recoveryState.ready = true;
@@ -272,14 +345,19 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 });
 
 server.on("error", (err) => {
-    console.error("SERVER ERROR:", err);
+    if (listenFailureHandled) return;
+    listenFailureHandled = true;
+    if (err.code === "EADDRINUSE") {
+        console.error(`Port ${PORT} is already in use.`);
+    } else {
+        console.error("SERVER ERROR:", err);
+    }
+    exit(1);
 });
 
 server.on("close", () => {
     console.error("SERVER CLOSED");
 });
-
-console.log("Listening:", server.listening);
 
 return server;
 }

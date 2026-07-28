@@ -5,6 +5,7 @@ export const ADMIN_USER_ACTIONS = Object.freeze({
   LIST_USERS: 'list_users',
   CREATE_USER: 'create_user',
   APPROVE_USER: 'approve_user',
+  DELETE_PENDING_REQUEST: 'delete_pending_request',
   SET_USER_ACTIVE: 'set_user_active',
   SET_USER_ROLE: 'set_user_role',
   DELETE_USER: 'delete_user',
@@ -124,6 +125,13 @@ export async function approveUser(userId) {
     payload: { userId },
   })
   return data.user
+}
+
+export async function deletePendingRequest(userId) {
+  return invokeAdminUsers({
+    action: ADMIN_USER_ACTIONS.DELETE_PENDING_REQUEST,
+    payload: { userId },
+  })
 }
 
 export async function setUserActive(userId, isActive) {

@@ -130,6 +130,17 @@ function childCompletion(child) {
     });
 }
 
+function getExecutionState(workflowRunId) {
+    if (activeExecutions.has(workflowRunId)) {
+        return { active: true, duplicate: true, busy: false };
+    }
+    return {
+        active: activeExecutions.size > 0,
+        duplicate: false,
+        busy: activeExecutions.size > 0
+    };
+}
+
 function publicSearchErrorMessage(error) {
     const message = String(error?.message || "The search could not be completed. Please try again.");
     if (/playwright|chromium|chrome executable|browser startup|[A-Z]:\\|\/(?:users|home|tmp)\//i.test(message)) {
@@ -383,6 +394,11 @@ function startTargetSearchExecution(payload, accessToken, dependencies = {}) {
             const request = validateTargetSearchRequest(payload);
             executionContext.payload = request;
             logExecution("started", request);
+            console.log("[LOCAL_WORKER_JOB_START]", {
+                workflow_run_id: workflowRunId,
+                search_request_id: request.search_request_id,
+                started_at: new Date().toISOString()
+            });
             console.log("[WORKFLOW_OWNER_RESOLVED]", {
                 owner_user_id: request.owner_user_id, workflow_run_id: workflowRunId,
                 search_request_id: request.search_request_id
@@ -592,7 +608,9 @@ function startTargetSearchExecution(payload, accessToken, dependencies = {}) {
                 ? "Target search execution stopped"
                 : "Target search execution failed", {
                 owner_user_id: payload.owner_user_id, workflow_run_id: workflowRunId,
-                search_request_id: payload.search_request_id, error: failure?.stack || failure?.message
+                search_request_id: payload.search_request_id,
+                error_code: failure?.code || "PLAYWRIGHT_PIPELINE_FAILED",
+                error: failure?.stack || failure?.message
             });
             if (supabase && !wasStopped) {
                 let failureClient = supabase;
@@ -615,6 +633,11 @@ function startTargetSearchExecution(payload, accessToken, dependencies = {}) {
             activeExecutions.delete(workflowRunId);
             activeExecutionContexts.delete(workflowRunId);
             activeWorkflowProcesses.delete(workflowRunId);
+            console.log("[LOCAL_WORKER_JOB_COMPLETE]", {
+                workflow_run_id: workflowRunId,
+                search_request_id: payload.search_request_id,
+                duration_ms: Date.now() - startedAt
+            });
             logExecution("registry_cleared", payload, { elapsed_ms: Date.now() - startedAt });
         }
     })();
@@ -626,7 +649,9 @@ function startTargetSearchExecution(payload, accessToken, dependencies = {}) {
 module.exports = {
     activeExecutions,
     activeExecutionContexts,
+    getExecutionState,
     activeWorkflowProcesses,
+    attachProgressReader,
     childCompletion,
     finalizeExecutionCompleted,
     failActiveExecutions,

@@ -4607,6 +4607,37 @@ body:has(.admin-login-command-page),
   box-shadow: 0 0 20px rgba(85, 220, 255, 0.1);
 }
 
+.admin-danger-action {
+  border-color: rgba(255, 91, 111, 0.55);
+  background: linear-gradient(135deg, rgba(179, 38, 58, 0.78), rgba(92, 17, 31, 0.86));
+  box-shadow: 0 0 20px rgba(255, 71, 96, 0.1);
+}
+
+.admin-pending-delete-dialog {
+  color: #f5fbff;
+  background: rgba(11, 34, 51, 0.98);
+  border: 1px solid rgba(255, 91, 111, 0.3);
+}
+
+.admin-pending-delete-dialog #delete-pending-description {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-pending-delete-dialog #delete-pending-description strong {
+  margin-top: 8px;
+  color: #fff;
+}
+
+.admin-pending-delete-dialog #delete-pending-description span {
+  color: #b9d4e2;
+}
+
+.admin-pending-delete-dialog #delete-pending-description p:last-child {
+  margin-top: 12px;
+  color: #ff9aaa;
+}
+
 .admin-primary-action::after {
   content: "";
   position: absolute;

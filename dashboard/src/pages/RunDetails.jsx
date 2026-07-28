@@ -10,6 +10,7 @@ import { usePageMeta } from '../hooks/usePageMeta'
 import { getCandidatesForRun, getRunTargetSummary, getTopCandidatesForRun, getWorkflowRunById, subscribeWorkflowRuns } from '../services/supabaseData'
 import { fallback, formatDate, formatNumber } from '../utils/format'
 import { deleteWorkflow, stopWorkflow } from '../services/workflowService'
+import { assertLocalExecutionAvailable, DEMO_MODE_MESSAGE, isDemoMode } from '../config/appMode'
 
 const ACTIVE_WORKFLOW_STATUSES = new Set(['running', 'starting', 'processing', 'in_progress'])
 
@@ -29,6 +30,7 @@ function formatDuration(start, end) {
 export function RunDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const demoMode = isDemoMode()
   const [confirmStop, setConfirmStop] = useState(false)
   const [stopping, setStopping] = useState(false)
   const stoppingRef = useRef(false)
@@ -54,6 +56,31 @@ export function RunDetails() {
 
   const { run, related, topCandidates } = data
   const canStop = ACTIVE_WORKFLOW_STATUSES.has(String(run.status || '').toLowerCase())
+
+  function requestStop() {
+    if (demoMode) {
+      try {
+        assertLocalExecutionAvailable('stop_workflow', 'run_details')
+      } catch {
+        setStopError(DEMO_MODE_MESSAGE)
+      }
+      return
+    }
+    setConfirmStop(true)
+  }
+
+  function requestDelete() {
+    setDeleteError('')
+    if (demoMode) {
+      try {
+        assertLocalExecutionAvailable('delete_workflow', 'run_details')
+      } catch {
+        setDeleteError(DEMO_MODE_MESSAGE)
+      }
+      return
+    }
+    setConfirmDelete(true)
+  }
 
   async function handleStop() {
     if (stoppingRef.current || !canStop) return
@@ -106,14 +133,11 @@ export function RunDetails() {
           </Link>
           <StatusBadge value={run.status} />
           {canStop ? (
-            <button type="button" className="button button-danger button-pill" onClick={() => setConfirmStop(true)} disabled={stopping}>
+            <button type="button" className="button button-danger button-pill" onClick={requestStop} disabled={stopping} title={demoMode ? 'Local execution only' : undefined}>
               {stopping ? 'Stopping...' : 'Stop'}
             </button>
           ) : null}
-          <button type="button" className="button button-danger button-pill" onClick={() => {
-            setDeleteError('')
-            setConfirmDelete(true)
-          }} disabled={deleting || stopping}>
+          <button type="button" className="button button-danger button-pill" onClick={requestDelete} disabled={deleting || stopping} title={demoMode ? 'Local execution only' : undefined}>
             {deleting ? 'Deleting...' : 'Delete'}
           </button>
         </div>

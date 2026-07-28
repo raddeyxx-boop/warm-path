@@ -1,5 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
 
 const FIRST_WORKFLOW_ID = '11111111-1111-4111-8111-111111111111'
 const FIRST_SEARCH_ID = '22222222-2222-4222-8222-222222222222'
@@ -32,8 +34,12 @@ test('consecutive submissions use only their own current values and returned IDs
     const [workflowRunId, searchRequestId] = ids[call++]
     return { ok: true, workflowRunId, searchRequestId, normalizedForm }
   }
-  const prepare = async (workflowRunId, searchRequestId) => {
-    starts.push({ workflow_run_id: workflowRunId, search_request_id: searchRequestId })
+  const prepare = async (workflowRunId, searchRequestId, initialization) => {
+    starts.push({
+      workflow_run_id: workflowRunId,
+      search_request_id: searchRequestId,
+      target_name: initialization.normalizedForm.targetName,
+    })
     return { status: 'running' }
   }
 
@@ -61,6 +67,7 @@ test('consecutive submissions use only their own current values and returned IDs
   assert.deepEqual(starts[1], {
     workflow_run_id: SECOND_WORKFLOW_ID,
     search_request_id: SECOND_SEARCH_ID,
+    target_name: 'Ali Elsheik',
   })
   assert.deepEqual(initializedForms[1], {
     targetName: 'Ali Elsheik', currentCompany: 'Anfal',
@@ -96,4 +103,82 @@ test('a rapid second submission is ignored while initialization is in progress',
   releaseInitialization()
   await first
   assert.equal(lock.current, false)
+})
+
+test('target search dispatch goes directly to the configured Playwright server', () => {
+  const serviceSource = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'targetSearchService.js'),
+    'utf8',
+  )
+  assert.match(serviceSource, /\/api\/searches\/start/)
+  assert.doesNotMatch(serviceSource, /supabase\.rpc\('start_target_search'/)
+  assert.match(serviceSource, /Authorization: `Bearer \$\{session\.access_token\}`/)
+  assert.doesNotMatch(serviceSource, /VITE_PLAYWRIGHT_WORKER_SECRET/)
+})
+
+test('server URL normalization is local-only and has no fallback', async () => {
+  const {
+    buildPlaywrightServerEndpoint,
+    normalizePlaywrightServerBaseUrl,
+  } = await import(
+    '../src/services/playwrightServerUrl.js'
+  )
+  assert.equal(
+    normalizePlaywrightServerBaseUrl(
+      ' http://localhost:3000/// ',
+      { appMode: 'local' },
+    ).url.href,
+    'http://localhost:3000/',
+  )
+  assert.throws(
+    () => normalizePlaywrightServerBaseUrl('', { appMode: 'local' }),
+    (error) => error.code === 'PLAYWRIGHT_SERVER_NOT_CONFIGURED',
+  )
+  assert.throws(
+    () => normalizePlaywrightServerBaseUrl(
+      'http://localhost:3000',
+      { appMode: 'demo' },
+    ),
+    (error) => error.code === 'PLAYWRIGHT_SERVER_NOT_CONFIGURED',
+  )
+  assert.equal(
+    normalizePlaywrightServerBaseUrl(
+      'http://localhost:3000/',
+      { appMode: 'local' },
+    ).url.href,
+    'http://localhost:3000/',
+  )
+  assert.equal(
+    buildPlaywrightServerEndpoint(
+      'http://localhost:3000/',
+      '/api/searches/start',
+      { appMode: 'local' },
+    ).url.href,
+    'http://localhost:3000/api/searches/start',
+  )
+})
+
+test('demo mode guards precede initialization and workflow mutations', () => {
+  const findSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'pages', 'FindTarget.jsx'), 'utf8')
+  const workflowSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'workflowService.js'), 'utf8')
+  assert.ok(findSource.indexOf('if (demoMode)') < findSource.indexOf('await submitTargetSearchOnce'))
+  for (const action of ['stop_workflow', 'delete_workflow']) {
+    assert.match(workflowSource, new RegExp(`assertLocalExecutionAvailable\\('${action}'`))
+  }
+  assert.ok(
+    workflowSource.indexOf("assertLocalExecutionAvailable('stop_workflow'") <
+      workflowSource.indexOf('requireSupabaseSession()'),
+  )
+})
+
+test('workflow actions use the server helper and contain no generic backend fallback', () => {
+  const workflowSource = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'workflowService.js'),
+    'utf8',
+  )
+  assert.match(workflowSource, /getPlaywrightServerEndpoint/)
+  assert.doesNotMatch(workflowSource, /VITE_API_BASE_URL/)
+  assert.doesNotMatch(workflowSource, /VITE_WORKFLOW_RUN_API_URL/)
+  assert.doesNotMatch(workflowSource, /localhost:3000/)
+  assert.doesNotMatch(workflowSource, /\/run['"`]/)
 })

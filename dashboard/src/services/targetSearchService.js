@@ -1,6 +1,11 @@
 import { supabase } from '../lib/supabase'
 import { requireSupabaseSession } from './authSession'
 import { normalizeLinkedInProfileUrl } from '../../../types/target-search-request.ts'
+import {
+  getPlaywrightServerEndpoint,
+  PlaywrightServerConfigurationError,
+} from './playwrightServerUrl'
+import { assertLocalExecutionAvailable } from '../config/appMode'
 
 export const ACTIVE_SEARCH_MESSAGE = 'You already have a search in progress. Wait for it to finish before starting another.'
 
@@ -172,37 +177,145 @@ export async function initializeTargetSearch(formData) {
   }
 }
 
-function getSearchStartUrl() {
-  const baseUrl = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '')
-  return `${baseUrl}/api/searches/start`
+function workerErrorCode(status, result) {
+  if (result?.code === 'ORIGIN_NOT_ALLOWED') return 'ORIGIN_NOT_ALLOWED'
+  if (status === 400) return 'LOCAL_PLAYWRIGHT_INVALID_REQUEST'
+  if (status === 401 || status === 403) return 'LOCAL_PLAYWRIGHT_WORKER_UNAUTHORIZED'
+  if (status === 404) return 'LOCAL_PLAYWRIGHT_ROUTE_NOT_FOUND'
+  if (status === 409) return 'LOCAL_PLAYWRIGHT_WORKER_BUSY'
+  if (status === 429) return 'LOCAL_PLAYWRIGHT_RATE_LIMITED'
+  if ([502, 503, 504].includes(status)) return 'PLAYWRIGHT_SERVER_UNAVAILABLE'
+  return result?.code || 'LOCAL_PLAYWRIGHT_WORKER_INVALID_RESPONSE'
 }
 
-export async function prepareInitializedTargetSearch(workflowRunId, searchRequestId) {
+export async function prepareInitializedTargetSearch(
+  workflowRunId,
+  searchRequestId,
+  initialization,
+) {
+  assertLocalExecutionAvailable('start_search', 'find_target')
+  const startedAt = performance.now()
+  let initializedSearchNeedsFailureSync = false
+  let endpoint = null
   try {
     const session = await requireSupabaseSession()
-    const response = await fetch(getSearchStartUrl(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        workflow_run_id: workflowRunId,
-        search_request_id: searchRequestId,
-      }),
-    })
-    const result = await response.json().catch(() => null)
-
-    if (!response.ok) {
+    initializedSearchNeedsFailureSync = true
+    const serverUrl = getPlaywrightServerEndpoint('/api/searches/start')
+    endpoint = serverUrl.href
+    const normalized = initialization?.normalizedForm
+    if (!normalized) {
       throw new TargetSearchError(
-        result?.code || 'api_error',
-        result?.message || 'Unable to prepare the search. Please try again.',
+        'LOCAL_PLAYWRIGHT_WORKER_INVALID_RESPONSE',
+        'The normalized target payload is unavailable.',
+      )
+    }
+    const requestBody = {
+      workflow_run_id: workflowRunId,
+      search_request_id: searchRequestId,
+      normalized_search_key: initialization.normalizedSearchKey,
+      target: {
+        name: normalized.targetName,
+        linkedin_name: normalized.targetName,
+        linkedin_url: normalized.linkedinName,
+        company: normalized.currentCompany,
+        current_company: normalized.currentCompany,
+        location: normalized.location,
+        keywords: normalized.keywords,
+        company_filter: normalized.companyFilter,
+        school_filter: normalized.schoolFilter,
+      },
+    }
+    console.info('[LOCAL_PLAYWRIGHT_DISPATCH_START]', {
+      endpoint,
+      workflow_run_id: workflowRunId,
+      search_request_id: searchRequestId,
+      target_name: normalized.targetName,
+      target_linkedin_url_present: Boolean(normalized.linkedinName),
+      started_at: new Date().toISOString(),
+    })
+
+    let response
+    try {
+      response = await fetch(serverUrl.href, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(requestBody),
+      })
+    } catch (error) {
+      throw new TargetSearchError(
+        'LOCAL_PLAYWRIGHT_WORKER_UNREACHABLE',
+        'Unable to reach the Playwright server. Check its public URL and CORS configuration.',
+        error,
       )
     }
 
+    const responseText = await response.text()
+    let result = null
+    try {
+      result = responseText ? JSON.parse(responseText) : null
+    } catch (error) {
+      throw new TargetSearchError(
+        'LOCAL_PLAYWRIGHT_WORKER_INVALID_RESPONSE',
+        'The local Playwright worker returned invalid JSON.',
+        error,
+      )
+    }
+
+    const accepted = response.status === 202 &&
+      result?.accepted !== false &&
+      result?.success !== false &&
+      result?.ok !== false
+    console.info('[LOCAL_PLAYWRIGHT_DISPATCH_RESPONSE]', {
+      status: response.status,
+      ok: response.ok,
+      content_type: response.headers.get('content-type'),
+      accepted,
+      parsed_response_code: result?.code || null,
+      duration_ms: Math.round(performance.now() - startedAt),
+    })
+
+    if (!response.ok) {
+      throw new TargetSearchError(
+        workerErrorCode(response.status, result),
+        result?.message || 'The local Playwright worker rejected the search.',
+      )
+    }
+    if (!accepted) {
+      throw new TargetSearchError(
+        'LOCAL_PLAYWRIGHT_WORKER_INVALID_RESPONSE',
+        'The local Playwright worker returned an invalid response.',
+      )
+    }
     return result
   } catch (error) {
-    if (error instanceof TargetSearchError) throw error
-    throw friendlyError(error)
+    const failure = error instanceof TargetSearchError
+      ? error
+      : error instanceof PlaywrightServerConfigurationError
+        ? new TargetSearchError(error.code, error.message, error)
+      : new TargetSearchError(
+        'LOCAL_PLAYWRIGHT_WORKER_UNREACHABLE',
+        'Unable to reach the local Playwright worker.',
+        error,
+      )
+    console.error('[LOCAL_PLAYWRIGHT_DISPATCH_FAILURE]', {
+      error_name: failure.name,
+      error_message: failure.message,
+      error_code: failure.code,
+      endpoint,
+      duration_ms: Math.round(performance.now() - startedAt),
+      workflow_run_id: workflowRunId,
+      search_request_id: searchRequestId,
+    })
+    if (initializedSearchNeedsFailureSync) {
+      await supabase.rpc('fail_target_search_pair', {
+        p_workflow_run_id: workflowRunId,
+        p_search_request_id: searchRequestId,
+        p_error_message: `${failure.code}: ${failure.message}`,
+      }).catch(() => null)
+    }
+    throw failure
   }
 }

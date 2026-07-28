@@ -236,6 +236,12 @@ async function sendExtractionToN8n({
             destination,
             timeout_ms: boundedTimeout
         });
+        logger.log("[N8N_WEBHOOK_DISPATCH]", {
+            workflow_run_id: workflowRunId,
+            search_request_id: searchRequestId,
+            attempt,
+            destination
+        });
 
         try {
             const headers = {
@@ -306,6 +312,14 @@ async function sendExtractionToN8n({
                 ...responseEvidence,
                 attempt,
                 n8n_execution_id: result.n8n_execution_id
+            });
+            logger.log("[N8N_WEBHOOK_RESPONSE]", {
+                workflow_run_id: workflowRunId,
+                search_request_id: searchRequestId,
+                response_status: response.status,
+                accepted: true,
+                attempt,
+                elapsed_ms: responseEvidence.elapsed_ms
             });
             return result;
         } catch (error) {

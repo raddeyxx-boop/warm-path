@@ -1,9 +1,17 @@
 const { createUserSupabaseClient } = require("./supabase-server");
-const { startTargetSearchExecution } = require("./playwright-search-runner");
+const {
+    getExecutionState,
+    startTargetSearchExecution
+} = require("./playwright-search-runner");
 const { randomUUID } = require("crypto");
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const REQUEST_FIELDS = new Set(["workflow_run_id", "search_request_id"]);
+const REQUEST_FIELDS = new Set([
+    "workflow_run_id",
+    "search_request_id",
+    "normalized_search_key",
+    "target"
+]);
 
 function errorResponse(res, status, code, message, errorId) {
     return res.status(status).json({ success: false, code, message, ...(errorId ? { error_id: errorId } : {}) });
@@ -55,7 +63,15 @@ function readBearerToken(req) {
 function validRequestBody(body) {
     if (!body || typeof body !== "object" || Array.isArray(body)) return false;
     if (Object.keys(body).some(key => !REQUEST_FIELDS.has(key))) return false;
-    return UUID_PATTERN.test(body.workflow_run_id || "") && UUID_PATTERN.test(body.search_request_id || "");
+    if (!UUID_PATTERN.test(body.workflow_run_id || "") ||
+        !UUID_PATTERN.test(body.search_request_id || "")) return false;
+    if (body.target !== undefined && (
+        !body.target ||
+        typeof body.target !== "object" ||
+        Array.isArray(body.target) ||
+        !String(body.target.name || body.target.linkedin_name || "").trim()
+    )) return false;
+    return true;
 }
 
 async function buildExecutionPayload(row) {
@@ -82,6 +98,7 @@ function createStartSearchHandler(options = {}) {
     const createClient = options.createUserSupabaseClient || createUserSupabaseClient;
     const prepareExecution = options.prepareExecution || buildExecutionPayload;
     const startExecution = options.startTargetSearchExecution || startTargetSearchExecution;
+    const readExecutionState = options.getExecutionState || getExecutionState;
 
     return async function startSearch(req, res) {
         const accessToken = readBearerToken(req);
@@ -90,7 +107,7 @@ function createStartSearchHandler(options = {}) {
         }
 
         if (!validRequestBody(req.body)) {
-            return errorResponse(res, 400, "INVALID_REQUEST", "The search request is invalid.");
+            return errorResponse(res, 400, "INVALID_SEARCH_REQUEST", "The search request is invalid.");
         }
 
         const workflowRunId = req.body.workflow_run_id;
@@ -109,6 +126,15 @@ function createStartSearchHandler(options = {}) {
             }
 
             ownerUserId = userData.user.id;
+            const executionState = readExecutionState(workflowRunId);
+            if (executionState.busy) {
+                return errorResponse(
+                    res,
+                    409,
+                    "PLAYWRIGHT_WORKER_BUSY",
+                    "The local Playwright worker is processing another search."
+                );
+            }
             const { error: recoveryError } = await supabase.rpc("recover_abandoned_target_searches");
             if (recoveryError) throw recoveryError;
             const { error: progressError } = await supabase.from("workflow_runs").update({
@@ -171,14 +197,17 @@ function createStartSearchHandler(options = {}) {
 
             const launch = startExecution(executionPayload, accessToken);
 
-            console.log("Search API execution dispatched", {
+            console.log("[LOCAL_WORKER_SEARCH_ACCEPTED]", {
                 workflow_run_id: workflowRunId, search_request_id: searchRequestId,
                 owner_user_id: ownerUserId, already_executing: launch.alreadyExecuting,
                 elapsed_ms: Date.now() - requestStartedAt
             });
 
-            return res.json({
+            return res.status(202).json({
+                ok: true,
                 success: true,
+                accepted: true,
+                duplicate: launch.alreadyExecuting,
                 cache_hit: null,
                 already_executing: launch.alreadyExecuting,
                 workflow_run_id: workflowRunId,

@@ -13,6 +13,7 @@ const ADMIN_USER_ACTIONS = [
   'list_users',
   'create_user',
   'approve_user',
+  'delete_pending_request',
   'set_user_active',
   'set_user_role',
   'delete_user',
@@ -227,8 +228,7 @@ Deno.serve(async (req: Request) => {
 
     const action = validateAction(body)
 
-    const payload =
-      body.payload &&
+    const payload = body.payload &&
       typeof body.payload === 'object'
         ? body.payload as Record<string, unknown>
         : {}
@@ -489,6 +489,37 @@ Deno.serve(async (req: Request) => {
         success: true,
         user: profile,
       })
+    }
+
+    if (action === 'delete_pending_request') {
+      const userId = String(payload.userId || '')
+
+      if (!userId) {
+        return errorResponse(400, 'MISSING_USER_ID', 'A user ID is required.')
+      }
+
+      if (userId === caller.user.id) {
+        return errorResponse(400, 'SELF_DELETE_FORBIDDEN', 'Administrators cannot delete their own request.')
+      }
+
+      const { data: profile, error } = await adminClient
+        .from('profiles')
+        .delete()
+        .eq('id', userId)
+        .eq('approval_status', 'pending')
+        .select('id')
+        .maybeSingle()
+
+      if (error) {
+        console.error('Pending profile delete failed:', error)
+        throw error
+      }
+
+      if (!profile) {
+        return errorResponse(409, 'REGISTRATION_ALREADY_PROCESSED', 'The pending user has already been processed.')
+      }
+
+      return jsonResponse(200, { success: true, deletedId: profile.id })
     }
 
     if (action === 'set_user_active') {

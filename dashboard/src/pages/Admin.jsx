@@ -7,7 +7,7 @@ import { AdminLayout } from '../components/admin/AdminLayout'
 import { AdminOverviewCards } from '../components/admin/AdminOverviewCards'
 import { AllUsersPanel } from '../components/admin/AllUsersPanel'
 import { PendingUsersPanel } from '../components/admin/PendingUsersPanel'
-import { approveUser, createUser, deleteUser, listPendingUsers, listUsers, setUserActive, setUserRole } from '../services/adminUsers'
+import { approveUser, createUser, deletePendingRequest, deleteUser, listPendingUsers, listUsers, setUserActive, setUserRole } from '../services/adminUsers'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const EMPTY_FORM = { email: '', password: '', fullName: '', contactNumber: '', role: 'user' }
@@ -27,6 +27,7 @@ export function Admin() {
   const [message, setMessage] = useState('')
   const [lastRefreshed, setLastRefreshed] = useState('')
   const [busyId, setBusyId] = useState('')
+  const [deletingRequestId, setDeletingRequestId] = useState('')
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
 
@@ -131,6 +132,24 @@ export function Admin() {
     return runUserAction(user, () => approveUser(user.id), 'User approved successfully.')
   }
 
+  async function handleDeletePending(user) {
+    if (deletingRequestId) return
+    setDeletingRequestId(user.id)
+    setActionError('')
+    setMessage('')
+    try {
+      await deletePendingRequest(user.id)
+      setPendingUsers((current) => current.filter((request) => request.id !== user.id))
+      setMessage('Pending approval request deleted.')
+    } catch (error) {
+      console.error('Could not delete pending approval request:', error)
+      setActionError('Could not delete the pending approval request. Please try again.')
+      throw error
+    } finally {
+      setDeletingRequestId('')
+    }
+  }
+
   function handleDelete(user) {
     if (!window.confirm(`Remove ${user.email || 'this user'}? This permanently deletes the account.`)) return
     return runUserAction(user, () => deleteUser(user.id), 'User account removed.')
@@ -151,7 +170,7 @@ export function Admin() {
         recentCount={pendingLoaded && usersLoaded ? recentCount : null}
       />
       <div className="admin-section-transition" key={activeSection}>
-        {activeSection === 'pending' ? <PendingUsersPanel users={pendingUsers} loaded={pendingLoaded} error={pendingError} busyId={busyId} onApprove={handleApprove} onRetry={loadUsers} /> : null}
+        {activeSection === 'pending' ? <PendingUsersPanel users={pendingUsers} loaded={pendingLoaded} error={pendingError} busyId={busyId} deletingRequestId={deletingRequestId} onApprove={handleApprove} onDelete={handleDeletePending} onRetry={loadUsers} /> : null}
         {activeSection === 'add' ? <AddUserPanel form={form} creating={creating} error={actionError} message={message} onChange={(field, value) => setForm((current) => ({ ...current, [field]: value }))} onSubmit={handleCreate} /> : null}
         {activeSection === 'users' ? <AllUsersPanel users={approvedUsers} loading={loading} error={usersError} busyId={busyId} authUserId={auth.user?.id} onRetry={loadUsers} onDelete={handleDelete} onSetActive={(user, value) => runUserAction(user, () => setUserActive(user.id, value), 'Account access updated.')} onSetRole={(user, role) => runUserAction(user, () => setUserRole(user.id, role), 'Account role updated.')} /> : null}
       </div>

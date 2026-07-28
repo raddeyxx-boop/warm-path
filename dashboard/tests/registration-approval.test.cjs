@@ -80,6 +80,22 @@ test('admin approval is authorized server-side and concurrency safe', () => {
   assert.match(admin, /approvedUsers/)
 })
 
+test('pending requests can be deleted safely without deleting the Auth user', () => {
+  assert.match(pendingUsersPanel, /<th>Actions<\/th><th>Delete<\/th>/)
+  assert.match(pendingUsersPanel, /Delete pending request\?/)
+  assert.match(pendingUsersPanel, /This action cannot be undone\./)
+  assert.match(pendingUsersPanel, /'Deleting\.\.\.' : 'Delete'/)
+  assert.match(adminService, /export async function deletePendingRequest/)
+  assert.match(edgeFunction, /action === 'delete_pending_request'/)
+  assert.match(edgeFunction, /\.from\('profiles'\)[\s\S]*\.delete\(\)[\s\S]*\.eq\('id', userId\)[\s\S]*\.eq\('approval_status', 'pending'\)/)
+  assert.doesNotMatch(
+    edgeFunction.match(/if \(action === 'delete_pending_request'\)[\s\S]*?return jsonResponse\(200, \{ success: true, deletedId: profile\.id \}\)/)?.[0] || '',
+    /auth\.admin[\s\S]*deleteUser/,
+  )
+  assert.match(admin, /setPendingUsers\(\(current\) => current\.filter\(\(request\) => request\.id !== user\.id\)\)/)
+  assert.match(admin, /Pending approval request deleted\./)
+})
+
 test('admin frontend and Edge Function share explicit action names and nested payloads', () => {
   for (const action of [
     'list_users',

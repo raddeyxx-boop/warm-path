@@ -9,6 +9,9 @@ const {
     validateStorageState,
     writeStorageStateAtomic
 } = require("../services/linkedin-session-state");
+const {
+    shouldRestoreLinkedInSession
+} = require("../scripts/restore-linkedin-session");
 
 const NOW = 2_000_000_000_000;
 
@@ -93,5 +96,25 @@ try {
 } finally {
     fs.rmSync(temporaryDirectory, { recursive: true, force: true });
 }
+
+assert.strictEqual(
+    shouldRestoreLinkedInSession({ LINKEDIN_SESSION_BASE64: "configured" }),
+    false,
+    "local development must preserve the local session by default"
+);
+assert.strictEqual(
+    shouldRestoreLinkedInSession({
+        LINKEDIN_SESSION_BASE64: "configured",
+        RESTORE_LINKEDIN_SESSION_FROM_BASE64: "true"
+    }),
+    true
+);
+assert.strictEqual(
+    shouldRestoreLinkedInSession({
+        LINKEDIN_SESSION_BASE64: "configured",
+        LINKEDIN_SESSION_RESTORE: "true"
+    }),
+    true
+);
 
 console.log("LinkedIn session-state tests passed.");

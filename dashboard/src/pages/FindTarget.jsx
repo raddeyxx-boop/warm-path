@@ -2,6 +2,11 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { initializeTargetSearch, prepareInitializedTargetSearch } from '../services/targetSearchService'
 import { normalizeSubmissionForm, submitTargetSearchOnce } from '../services/targetSearchSubmission'
+import {
+  assertLocalExecutionAvailable,
+  DEMO_MODE_MESSAGE,
+  isDemoMode,
+} from '../config/appMode'
 
 const initialForm = {
   targetName: '',
@@ -33,6 +38,7 @@ export function FindTarget() {
   const [submitError, setSubmitError] = useState('')
   const submissionInFlightRef = useRef(false)
   const errors = getRequiredErrors(form)
+  const demoMode = isDemoMode()
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -53,6 +59,14 @@ export function FindTarget() {
   async function handleSubmit(event) {
     event.preventDefault()
     if (submissionInFlightRef.current) return
+    if (demoMode) {
+      try {
+        assertLocalExecutionAvailable('start_search', 'find_target')
+      } catch {
+        setSubmitError(DEMO_MODE_MESSAGE)
+      }
+      return
+    }
     const nextErrors = getRequiredErrors(form)
 
     if (Object.keys(nextErrors).length) {
@@ -95,7 +109,12 @@ export function FindTarget() {
       setPendingInitialization(null)
       navigate('/runs')
     } catch (error) {
-      setSubmitError(error.message || 'Unable to initialize the search. Please try again.')
+      const message = error.message || 'Unable to initialize the search. Please try again.'
+      setSubmitError(
+        /^(LOCAL_PLAYWRIGHT_|PLAYWRIGHT_SERVER_)/.test(String(error.code || ''))
+          ? `${error.code}: ${message}`
+          : message,
+      )
     } finally {
       setSubmitPhase('idle')
     }
@@ -174,6 +193,7 @@ export function FindTarget() {
           <button type="submit" className="button button-primary" disabled={submitPhase !== 'idle'}>
             {submitPhase === 'initializing' ? 'Initializing...' : submitPhase === 'preparing' ? 'Preparing Search...' : 'Start Search'}
           </button>
+          {demoMode ? <small className="field-help">Local execution only</small> : null}
         </div>
       </form>
     </section>

@@ -29,6 +29,7 @@ export async function submitTargetSearchOnce({
     const preparation = await prepare(
       initialization.workflowRunId,
       initialization.searchRequestId,
+      initialization,
     )
 
     return { ignored: false, normalizedForm, initialization, preparation }

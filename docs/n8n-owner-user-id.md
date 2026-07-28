@@ -28,24 +28,32 @@ Authorization: Bearer <supabase-access-token>
 
 Do not log the access token.
 
-## Direct CLI Runs
+## Dashboard and CLI Runs
 
-The normal path is the logged-in app calling `POST /run`, which passes the authenticated user id and access token into the Node pipeline.
-
-The dashboard service reads the current Supabase session with `supabase.auth.getSession()` and sends:
+In local mode, the normal path initializes the search through Supabase and then
+calls the local Playwright server:
 
 ```text
-owner_user_id = session.user.id
+POST ${VITE_PLAYWRIGHT_SERVER_URL}/api/searches/start
+```
+
+The dashboard reads the current Supabase session and sends:
+
+```text
 Authorization = Bearer <session.access_token>
 ```
 
-The browser launch URL is controlled by:
+The request body preserves the `workflow_run_id` and `search_request_id` created by
+the initialization RPC. The worker derives the trusted owner from the validated
+access token.
 
 ```text
-VITE_WORKFLOW_RUN_API_URL=http://localhost:3000/run
+VITE_APP_MODE=local
+VITE_PLAYWRIGHT_SERVER_URL=http://localhost:3000
 ```
 
-If the variable is not set, the dashboard defaults to `http://localhost:3000/run`.
+The Vercel deployment uses `VITE_APP_MODE=demo`, does not configure this URL,
+and never dispatches execution requests.
 
 If you run the sender directly, provide the same auth context either as environment variables:
 
@@ -71,8 +79,8 @@ If either value is missing in an interactive terminal, the script prompts for it
 4. Confirm Supabase created an `sb-<project-ref>-auth-token` key.
 5. Refresh the page and confirm the dashboard remains authenticated.
 6. Start the workflow from the dashboard.
-7. Open DevTools Network and inspect the `/run` request.
-8. Confirm the request body has `owner_user_id`.
+7. Open DevTools Network and inspect `/api/searches/start`.
+8. Confirm the request body has both authoritative workflow identifiers.
 9. Confirm the `Authorization` header exists.
 
 Do not copy, publish, or log the full bearer token.

@@ -26,7 +26,7 @@ async function checkN8nWebhook(options = {}) {
         sleep: options.sleep,
         payload: {
             diagnostic: true,
-            source: "render-dispatch-check",
+            source: "local-worker-dispatch-check",
             timestamp: new Date().toISOString(),
             owner_user_id: "diagnostic",
             workflow_run_id: "diagnostic",

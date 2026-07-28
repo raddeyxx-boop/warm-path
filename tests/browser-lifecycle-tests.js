@@ -262,10 +262,13 @@ async function run() {
         navigation: false,
         profileMenu: false
     });
-    await verify(authPage, 45000, {
-        browser: authResources.browser,
-        context: authResources.context
-    });
+    await assert.rejects(
+        () => verify(authPage, 45000, {
+            browser: authResources.browser,
+            context: authResources.context
+        }),
+        error => error.code === "LINKEDIN_AUTH_INDICATORS_MISSING"
+    );
 
     for (const rejectedUrl of ["https://www.linkedin.com/login", "https://www.linkedin.com/authwall"]) {
         authResources = fakeResources();

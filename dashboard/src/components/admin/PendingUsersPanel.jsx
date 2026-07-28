@@ -1,4 +1,5 @@
-import { Check, Clock3, Loader2, Radio, ShieldCheck } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Clock3, Loader2, Radio, ShieldCheck, Trash2 } from 'lucide-react'
 import { ErrorState } from '../StateBlocks'
 import { formatDate } from '../../utils/format'
 
@@ -8,7 +9,29 @@ function initials(name, email) {
   return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)[0]}` : source.slice(0, 2)).toUpperCase()
 }
 
-export function PendingUsersPanel({ busyId, error, loaded, onApprove, onRetry, users }) {
+export function PendingUsersPanel({ busyId, deletingRequestId, error, loaded, onApprove, onDelete, onRetry, users }) {
+  const [requestToDelete, setRequestToDelete] = useState(null)
+  const isDeleting = requestToDelete?.id === deletingRequestId
+
+  useEffect(() => {
+    if (!requestToDelete) return undefined
+    function onKeyDown(event) {
+      if (event.key === 'Escape' && !isDeleting) setRequestToDelete(null)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [isDeleting, requestToDelete])
+
+  async function confirmDelete() {
+    if (!requestToDelete || isDeleting) return
+    try {
+      await onDelete(requestToDelete)
+      setRequestToDelete(null)
+    } catch {
+      // The parent keeps the row visible and presents the readable error.
+    }
+  }
+
   return (
     <section className="admin-glass-panel admin-section-panel admin-pending-command-panel" aria-labelledby="pending-users-title">
       <div className="admin-pending-hero">
@@ -51,7 +74,7 @@ export function PendingUsersPanel({ busyId, error, loaded, onApprove, onRetry, u
       {users.length ? (
         <div className="admin-data-table-wrap">
           <table className="admin-data-table admin-pending-table">
-            <thead><tr><th>User</th><th>Email</th><th>Contact</th><th>Requested</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>User</th><th>Email</th><th>Contact</th><th>Requested</th><th>Status</th><th>Actions</th><th>Delete</th></tr></thead>
             <tbody>
               {users.map((user) => {
                 const busy = busyId === user.id
@@ -68,6 +91,12 @@ export function PendingUsersPanel({ busyId, error, loaded, onApprove, onRetry, u
                         {busy ? 'Approving...' : 'Approve'}
                       </button>
                     </td>
+                    <td>
+                      <button type="button" className="admin-primary-action admin-danger-action" disabled={deletingRequestId === user.id} onClick={() => setRequestToDelete(user)} aria-label={`Delete pending request for ${user.email}`}>
+                        {deletingRequestId === user.id ? <Loader2 className="spin" size={15} /> : <Trash2 size={15} />}
+                        {deletingRequestId === user.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
@@ -76,6 +105,28 @@ export function PendingUsersPanel({ busyId, error, loaded, onApprove, onRetry, u
         </div>
       ) : null}
       {users.length && !error ? <p className="admin-panel-footnote"><Check size={14} /> Approval immediately grants authorized dashboard access.</p> : null}
+      {requestToDelete ? (
+        <div className="modal-backdrop delete-modal-backdrop" role="presentation" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !isDeleting) setRequestToDelete(null)
+        }}>
+          <section className="card confirmation-dialog delete-confirmation-dialog admin-pending-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-pending-title" aria-describedby="delete-pending-description">
+            <h2 id="delete-pending-title">Delete pending request?</h2>
+            <div id="delete-pending-description">
+              <p>This will remove the pending approval request for:</p>
+              <strong>{requestToDelete.full_name || 'Name unavailable'}</strong>
+              <span>{requestToDelete.email || 'Email unavailable'}</span>
+              <p>This action cannot be undone.</p>
+            </div>
+            <div className="card-actions confirmation-actions">
+              <button type="button" className="button button-secondary" disabled={isDeleting} onClick={() => setRequestToDelete(null)}>Cancel</button>
+              <button type="button" className="button button-danger" disabled={isDeleting} onClick={confirmDelete}>
+                {isDeleting ? <Loader2 className="spin" size={15} /> : <Trash2 size={15} />}
+                {isDeleting ? 'Deleting...' : 'Delete request'}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 }

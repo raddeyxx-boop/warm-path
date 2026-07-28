@@ -4,6 +4,9 @@ const { chromium } = require("playwright");
 const { LINKEDIN_SESSION_PATH } = require("../config/linkedin-session");
 const {
     cookieExpired,
+    cookieValueHash,
+    sessionFileDiagnostic,
+    sessionStateDiagnostic,
     validateStorageState
 } = require("./linkedin-session-state");
 
@@ -283,10 +286,34 @@ function authenticationConfirmedByEvidence(evidence) {
 
     return evidence.safe_url &&
         evidence.authenticated_shell_found &&
-        authenticatedEvidenceCount >= 1 &&
+        authenticatedEvidenceCount >= 2 &&
         !negativeAuthState &&
         !evidence.page_closed &&
         evidence.browser_connected;
+}
+
+function redirectChain(response) {
+    const urls = [];
+    let request = response?.request?.();
+    while (request) {
+        urls.unshift(request.url());
+        request = request.redirectedFrom();
+    }
+    return urls;
+}
+
+async function logLinkedInFirstResponse(response, requestedUrl, page) {
+    const headers = response?.allHeaders
+        ? await response.allHeaders().catch(() => ({}))
+        : response?.headers?.() || {};
+    console.log("[LINKEDIN_FIRST_RESPONSE]", {
+        requested_url: requestedUrl,
+        response_url: response?.url?.() || null,
+        status: response?.status?.() ?? null,
+        redirect_chain: redirectChain(response),
+        set_cookie_header_present: Boolean(headers["set-cookie"]),
+        final_url: safePageUrl(page)
+    });
 }
 
 async function visibleState(page, selector) {
@@ -355,9 +382,10 @@ async function assertLinkedInAuthenticated(
     console.log("====================================");
     const navigationStartedAt = Date.now();
     const targetUrl = LINKEDIN_FEED_URL;
-    await page.goto(LINKEDIN_FEED_URL, {
+    const firstResponse = await page.goto(LINKEDIN_FEED_URL, {
         waitUntil: "domcontentloaded"
     });
+    await logLinkedInFirstResponse(firstResponse, targetUrl, page);
 
     console.log("Current URL:", page.url());
     console.log("Target URL:", targetUrl);
@@ -407,13 +435,18 @@ async function assertLinkedInAuthenticated(
 
     try {
         await page.waitForFunction(
-            ({ unauthenticatedSelector, stabilityWindowMs }) => {
+            ({ searchSelector, navSelector, profileSelector, unauthenticatedSelector, stabilityWindowMs }) => {
                 const url = window.location.href;
                 const forbiddenUrl = /\/(?:login|checkpoint|challenge|uas\/login|authwall|signin|security-verification|captcha)(?:[/?#]|$)/i
                     .test(url);
                 const authenticated = !forbiddenUrl &&
                     document.visibilityState === "visible" &&
                     Boolean(document.querySelector("main")) &&
+                    Boolean(
+                        document.querySelector(searchSelector) ||
+                        document.querySelector(navSelector) ||
+                        document.querySelector(profileSelector)
+                    ) &&
                     !document.querySelector(unauthenticatedSelector);
                 if (!authenticated) {
                     window.__warmPathAuthenticatedSince = 0;
@@ -426,6 +459,9 @@ async function assertLinkedInAuthenticated(
                 return performance.now() - window.__warmPathAuthenticatedSince >= stabilityWindowMs;
             },
             {
+                searchSelector: AUTHENTICATED_SEARCH_SELECTOR,
+                navSelector: AUTHENTICATED_NAV_SELECTOR,
+                profileSelector: PROFILE_MENU_SELECTOR,
                 unauthenticatedSelector: UNAUTHENTICATED_UI_SELECTOR,
                 stabilityWindowMs: AUTH_STABILITY_WINDOW_MS
             },
@@ -537,7 +573,19 @@ async function startBrowser(options = {}) {
                 { session_path: sessionPath, reason: error.message }
             );
         }
-        readAndValidateSession(sessionPath);
+        const loadedState = readAndValidateSession(sessionPath);
+        const loadFile = sessionFileDiagnostic(sessionPath);
+        console.log("[SESSION_PATH_DIAGNOSTIC]", {
+            save_path: LINKEDIN_SESSION_PATH,
+            load_path: sessionPath,
+            save_path_absolute: path.resolve(LINKEDIN_SESSION_PATH),
+            load_path_absolute: loadFile.path_absolute,
+            paths_match: path.resolve(LINKEDIN_SESSION_PATH) === loadFile.path_absolute,
+            file_exists: loadFile.file_exists,
+            file_size: loadFile.file_size,
+            file_modified_at: loadFile.file_modified_at
+        });
+        console.log("[SESSION_STATE_DIAGNOSTIC]", sessionStateDiagnostic(loadedState));
         const launchOptions = config.launchOptions || {};
         const {
             headless: ignoredHeadless,
@@ -550,6 +598,21 @@ async function startBrowser(options = {}) {
             .filter(argument => !/^--(?:auto-open-devtools-for-tabs|remote-debugging|window-size|window-position|start-maximized)/i.test(argument));
 
         const chromiumImpl = config.chromiumImpl || chromium;
+        console.log("[CONTEXT_CONFIGURATION_DIAGNOSTIC]", {
+            source: "index",
+            browser_type: "chromium",
+            channel: config.channel || null,
+            headless: true,
+            executable_path: safeLaunchOptions.executablePath || null,
+            user_agent: config.contextOptions?.userAgent || null,
+            viewport: { width: 1440, height: 900 },
+            locale: config.contextOptions?.locale || null,
+            timezone_id: config.contextOptions?.timezoneId || null,
+            proxy_configured: Boolean(safeLaunchOptions.proxy || config.contextOptions?.proxy),
+            storage_state_path: sessionPath,
+            persistent_context: false,
+            launch_args: headlessLaunchArgs
+        });
         browser = await chromiumImpl.launch({
             ...safeLaunchOptions,
             ...(config.channel ? { channel: config.channel } : {}),
@@ -589,6 +652,14 @@ async function startBrowser(options = {}) {
             required_cookie_present_before_navigation: Boolean(liAt),
             required_cookie_expired_before_navigation: Boolean(liAt && cookieExpired(liAt))
         };
+        console.log("[SESSION_BEFORE_NAVIGATION]", {
+            context_cookie_count: linkedInCookies?.length ?? null,
+            linkedin_cookie_count: linkedInCookies?.length ?? null,
+            li_at_present: Boolean(liAt),
+            li_at_expired: Boolean(liAt && cookieExpired(liAt)),
+            li_at_hash: cookieValueHash(liAt),
+            current_url: "about:blank"
+        });
 
         let sessionFileSize = 0;
         try {

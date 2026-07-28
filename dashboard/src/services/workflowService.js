@@ -1,66 +1,14 @@
 import { requireSupabaseSession } from './authSession'
-
-const DEFAULT_WORKFLOW_RUN_URL = 'http://localhost:3000/run'
-
-function getApiBaseUrl() {
-  return (import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000').replace(/\/$/, '')
-}
-
-function getWorkflowRunUrl() {
-  return import.meta.env.VITE_WORKFLOW_RUN_API_URL || DEFAULT_WORKFLOW_RUN_URL
-}
-
-function parseWorkflowResponse(response, contentType) {
-  if (contentType.includes('application/json')) {
-    return response.json()
-  }
-
-  return response.text()
-}
-
-export async function startWarmPathWorkflow(existingPayload = {}) {
-  const session = await requireSupabaseSession()
-  const ownerUserId = session.user.id
-  const workflowRunUrl = getWorkflowRunUrl()
-
-  if (!workflowRunUrl) {
-    throw new Error('Missing VITE_WORKFLOW_RUN_API_URL.')
-  }
-
-  const payload = {
-    ...existingPayload,
-    owner_user_id: ownerUserId,
-  }
-
-  const response = await fetch(workflowRunUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify(payload),
-  })
-
-  const contentType = response.headers.get('content-type') ?? ''
-  const result = await parseWorkflowResponse(response, contentType)
-
-  if (!response.ok) {
-    const message =
-      typeof result === 'string'
-        ? result
-        : result?.error ??
-          result?.message ??
-          `Workflow request failed with status ${response.status}.`
-
-    throw new Error(message)
-  }
-
-  return result
-}
+import { getPlaywrightServerEndpoint } from './playwrightServerUrl'
+import { assertLocalExecutionAvailable } from '../config/appMode'
 
 export async function stopWorkflow(workflowRunId) {
+  assertLocalExecutionAvailable('stop_workflow', 'run_details')
   const session = await requireSupabaseSession()
-  const response = await fetch(`${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowRunId)}/stop`, {
+  const endpoint = getPlaywrightServerEndpoint(
+    `/api/workflows/${encodeURIComponent(workflowRunId)}/stop`,
+  )
+  const response = await fetch(endpoint.href, {
     method: 'POST',
     headers: { Authorization: `Bearer ${session.access_token}` },
   })
@@ -72,8 +20,12 @@ export async function stopWorkflow(workflowRunId) {
 }
 
 export async function deleteWorkflow(workflowRunId) {
+  assertLocalExecutionAvailable('delete_workflow', 'run_details')
   const session = await requireSupabaseSession()
-  const response = await fetch(`${getApiBaseUrl()}/api/workflows/${encodeURIComponent(workflowRunId)}`, {
+  const endpoint = getPlaywrightServerEndpoint(
+    `/api/workflows/${encodeURIComponent(workflowRunId)}`,
+  )
+  const response = await fetch(endpoint.href, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${session.access_token}` },
   })

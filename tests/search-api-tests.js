@@ -134,7 +134,7 @@ async function run() {
         },
         startTargetSearchExecution: () => { executionStarts += 1; return { started: true, alreadyExecuting: false }; }
     });
-    assert.strictEqual(response.statusCode, 200);
+    assert.strictEqual(response.statusCode, 202);
     assert.strictEqual(response.body.status, "running");
     assert.strictEqual(response.body.cache_hit, null);
     assert.strictEqual(response.body.next_action, "cache_check_pending");

@@ -1,3 +1,7 @@
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+
 const LINKEDIN_COOKIE_DOMAIN = /^(?:\.)?(?:[a-z0-9-]+\.)*linkedin\.com$/i;
 const COOKIE_DOMAIN = /^(?:\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i;
 
@@ -107,6 +111,45 @@ function safeStorageStateSummary(storageState, { now = Date.now() } = {}) {
     };
 }
 
+function cookieValueHash(cookie) {
+    if (!cookie?.value) return null;
+    return crypto.createHash("sha256").update(cookie.value).digest("hex").slice(0, 12);
+}
+
+function sessionStateDiagnostic(storageState, { now = Date.now() } = {}) {
+    const cookies = Array.isArray(storageState?.cookies) ? storageState.cookies : [];
+    const origins = Array.isArray(storageState?.origins) ? storageState.origins : [];
+    const linkedInCookies = cookies.filter(isLinkedInCookie);
+    const liAt = linkedInCookies.find(cookie => cookie.name === "li_at" && cookie.value);
+    return {
+        cookie_count: cookies.length,
+        cookie_names: cookies.map(cookie => cookie.name).sort(),
+        origin_count: origins.length,
+        origin_urls: origins.map(origin => origin.origin).filter(Boolean).sort(),
+        li_at_present: Boolean(liAt),
+        li_at_expired: Boolean(liAt && cookieExpired(liAt, now)),
+        li_at_hash: cookieValueHash(liAt),
+        li_rm_present: linkedInCookies.some(cookie => cookie.name === "li_rm" && cookie.value)
+    };
+}
+
+function sessionFileDiagnostic(sessionPath) {
+    const absolutePath = path.resolve(sessionPath);
+    let stats = null;
+    try {
+        stats = fs.statSync(absolutePath);
+    } catch {
+        stats = null;
+    }
+    return {
+        path: sessionPath,
+        path_absolute: absolutePath,
+        file_exists: Boolean(stats),
+        file_size: stats?.size || 0,
+        file_modified_at: stats?.mtime?.toISOString() || null
+    };
+}
+
 function writeStorageStateAtomic(destinationPath, storageState) {
     const sessionDirectory = path.dirname(destinationPath);
     const temporaryPath = path.join(
@@ -130,11 +173,12 @@ function writeStorageStateAtomic(destinationPath, storageState) {
 
 module.exports = {
     LinkedInSessionStateError,
+    cookieValueHash,
     cookieExpired,
     isLinkedInCookie,
     safeStorageStateSummary,
+    sessionFileDiagnostic,
+    sessionStateDiagnostic,
     validateStorageState,
     writeStorageStateAtomic
 };
-const fs = require("fs");
-const path = require("path");
