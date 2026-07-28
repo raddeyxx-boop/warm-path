@@ -130,7 +130,7 @@ export async function approveUser(userId) {
 export async function deletePendingRequest(userId) {
   return invokeAdminUsers({
     action: ADMIN_USER_ACTIONS.DELETE_PENDING_REQUEST,
-    payload: { userId },
+    user_id: userId,
   })
 }
 

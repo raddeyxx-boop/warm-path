@@ -71,7 +71,7 @@ test('RLS requires approved persisted profiles for dashboard data access', () =>
 test('admin approval is authorized server-side and concurrency safe', () => {
   assert.match(edgeFunction, /const caller = await requireAdmin/)
   assert.match(edgeFunction, /action === 'approve_user'/)
-  assert.match(edgeFunction, /\.eq\('approval_status', 'pending'\)/)
+  assert.match(edgeFunction, /\.eq\(\s*'approval_status',\s*'pending',?\s*\)/)
   assert.match(edgeFunction, /approved_by: caller\.user\.id/)
   assert.match(edgeFunction, /The pending user has already been processed/)
   assert.match(adminService, /export async function approveUser/)
@@ -86,10 +86,13 @@ test('pending requests can be deleted safely without deleting the Auth user', ()
   assert.match(pendingUsersPanel, /This action cannot be undone\./)
   assert.match(pendingUsersPanel, /'Deleting\.\.\.' : 'Delete'/)
   assert.match(adminService, /export async function deletePendingRequest/)
+  assert.match(adminService, /action:\s*ADMIN_USER_ACTIONS\.DELETE_PENDING_REQUEST,[\s\S]*user_id:\s*userId/)
   assert.match(edgeFunction, /action === 'delete_pending_request'/)
-  assert.match(edgeFunction, /\.from\('profiles'\)[\s\S]*\.delete\(\)[\s\S]*\.eq\('id', userId\)[\s\S]*\.eq\('approval_status', 'pending'\)/)
+  assert.match(edgeFunction, /UUID_PATTERN\.test\(pendingUserId\)/)
+  assert.match(edgeFunction, /\.from\('pending_users'\)[\s\S]*\.delete\(\)[\s\S]*\.eq\('id', pendingUserId\)/)
+  assert.match(edgeFunction, /PENDING_REQUEST_NOT_FOUND/)
   assert.doesNotMatch(
-    edgeFunction.match(/if \(action === 'delete_pending_request'\)[\s\S]*?return jsonResponse\(200, \{ success: true, deletedId: profile\.id \}\)/)?.[0] || '',
+    edgeFunction.match(/if \(action === 'delete_pending_request'\)[\s\S]*?deleted_request: deletedRequest/)?.[0] || '',
     /auth\.admin[\s\S]*deleteUser/,
   )
   assert.match(admin, /setPendingUsers\(\(current\) => current\.filter\(\(request\) => request\.id !== user\.id\)\)/)

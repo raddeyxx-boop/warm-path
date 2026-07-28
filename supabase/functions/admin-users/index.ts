@@ -23,6 +23,7 @@ type AdminUserAction = typeof ADMIN_USER_ACTIONS[number]
 
 const VALID_ACTIONS = new Set<AdminUserAction>(ADMIN_USER_ACTIONS)
 const VALID_ROLES = new Set(['admin', 'user'])
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type Role = 'admin' | 'user'
 
@@ -492,34 +493,68 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === 'delete_pending_request') {
-      const userId = String(payload.userId || '')
+      const pendingUserId =
+        body.user_id ??
+        body.request_id ??
+        body.pending_user_id ??
+        payload.user_id ??
+        payload.request_id ??
+        payload.pending_user_id ??
+        payload.userId
 
-      if (!userId) {
-        return errorResponse(400, 'MISSING_USER_ID', 'A user ID is required.')
+      if (
+        typeof pendingUserId !== 'string' ||
+        !UUID_PATTERN.test(pendingUserId)
+      ) {
+        return errorResponse(
+          400,
+          'INVALID_PENDING_USER_ID',
+          'A valid pending user ID is required.',
+        )
       }
 
-      if (userId === caller.user.id) {
-        return errorResponse(400, 'SELF_DELETE_FORBIDDEN', 'Administrators cannot delete their own request.')
+      if (pendingUserId === caller.user.id) {
+        return errorResponse(
+          400,
+          'SELF_DELETE_FORBIDDEN',
+          'Administrators cannot delete their own request.',
+        )
       }
 
-      const { data: profile, error } = await adminClient
-        .from('profiles')
+      const { data: deletedRequest, error } = await adminClient
+        .from('pending_users')
         .delete()
-        .eq('id', userId)
-        .eq('approval_status', 'pending')
-        .select('id')
+        .eq('id', pendingUserId)
+        .select('id, full_name, email')
         .maybeSingle()
 
       if (error) {
-        console.error('Pending profile delete failed:', error)
-        throw error
+        console.error('Failed to delete pending request', {
+          pending_user_id: pendingUserId,
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        })
+        return errorResponse(
+          500,
+          'PENDING_REQUEST_DELETE_FAILED',
+          'Could not delete pending approval request.',
+        )
       }
 
-      if (!profile) {
-        return errorResponse(409, 'REGISTRATION_ALREADY_PROCESSED', 'The pending user has already been processed.')
+      if (!deletedRequest) {
+        return errorResponse(
+          404,
+          'PENDING_REQUEST_NOT_FOUND',
+          'Pending approval request not found.',
+        )
       }
 
-      return jsonResponse(200, { success: true, deletedId: profile.id })
+      return jsonResponse(200, {
+        success: true,
+        deleted_request: deletedRequest,
+      })
     }
 
     if (action === 'set_user_active') {
