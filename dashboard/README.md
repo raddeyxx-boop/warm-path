@@ -15,9 +15,13 @@ VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_ANON_KEY
 ```
 
-Start all services from the repository root with `npm run dev:all`. The
-dashboard is served at `http://localhost:5173` and dispatches authenticated
-searches to the existing Playwright API at `http://localhost:3000`.
+Start all services from the repository root with `npm run dev:all`. Wait for
+`All services are ready.` before opening `http://localhost:5173`. This is the
+canonical full-stack workflow. The dashboard dispatches authenticated searches
+to the Playwright API at `http://localhost:3000`.
+
+The individual `npm start`, `npm run n8n`, and `npm run frontend` commands are
+for isolated debugging only and should not normally be mixed with `dev:all`.
 
 ## Vercel demo mode
 

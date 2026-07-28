@@ -4,6 +4,7 @@ const { PassThrough } = require("stream");
 const {
     activeExecutions,
     finalizeExecutionCompleted,
+    shouldReuseSearchCache,
     startTargetSearchExecution,
     waitForPersistedResults
 } = require("../services/playwright-search-runner");
@@ -95,6 +96,7 @@ async function run() {
         const successUpdates = [];
         const successCalls = [];
         const dependencies = {
+            environment: { NODE_ENV: "production" },
             spawn: mockSpawn(0, successCalls),
             createUserSupabaseClient: () => mockSupabase(successUpdates),
             findValidSharedSearchCache: async () => ({ hit: false, invalid: false, row: null, profiles: [] }),
@@ -112,7 +114,14 @@ async function run() {
         await first.promise;
         assert.strictEqual(successCalls.length, 1);
         assert.ok(successCalls[0][1][0].endsWith("index.js"), "reuses the existing Playwright pipeline entry point");
-        assert.strictEqual(successCalls[0][2].env.PLAYWRIGHT_HEADLESS, "true");
+        assert.strictEqual(successCalls[0][2].env.PLAYWRIGHT_HEADLESS, "false");
+        assert.strictEqual(successCalls[0][2].windowsHide, false);
+        assert.strictEqual(shouldReuseSearchCache({}), false);
+        assert.strictEqual(shouldReuseSearchCache({ NODE_ENV: "production" }), true);
+        assert.strictEqual(shouldReuseSearchCache({
+            NODE_ENV: "production",
+            PLAYWRIGHT_REUSE_SEARCH_CACHE: "false"
+        }), false);
         assert.strictEqual(successCalls[0][2].env.NODE_ENV, "production");
         assert.strictEqual(successCalls[0][2].env.PWDEBUG, undefined);
         assert.strictEqual(successCalls[0][2].env.PWDEBUGIMPL, undefined);
@@ -204,6 +213,7 @@ async function run() {
         const lookupFailureUpdates = [];
         let lookupFailureSpawned = false;
         const lookupFailed = startTargetSearchExecution(payload, "token", {
+            environment: { NODE_ENV: "production" },
             spawn: () => { lookupFailureSpawned = true; throw new Error("must not spawn"); },
             createUserSupabaseClient: () => mockSupabase(lookupFailureUpdates),
             findValidSharedSearchCache: async () => {
@@ -407,6 +417,24 @@ async function run() {
         assert.deepStrictEqual(cachedDispatch.result.connections, [cachedProfile]);
         assert.deepStrictEqual(cachedDispatch.result.candidates, [cachedProfile]);
         assert.notStrictEqual(cachedDispatch.result.connections, cachedDispatch.result.candidates);
+
+        const localFreshSpawnCalls = [];
+        const localFresh = startTargetSearchExecution(payload, "token", {
+            ...dependencies,
+            environment: { NODE_ENV: "development" },
+            spawn: mockSpawn(0, localFreshSpawnCalls),
+            findValidSharedSearchCache: async () => {
+                throw new Error("local fresh execution must not read shared cache");
+            },
+            readFinalExtractionResult: (_file, expected) =>
+                mockFinalResult({ ...payload, ...expected }),
+            dispatchCompletedExtraction: async () => {},
+            waitForPersistedResults: async () => ({ candidateCount: 1 }),
+            finalizeExecutionCompleted: async () => {}
+        });
+        await localFresh.promise;
+        assert.strictEqual(localFreshSpawnCalls.length, 1,
+            "local execution launches Playwright even when a shared result may exist");
 
         console.log("Playwright search runner tests passed.");
     } finally {

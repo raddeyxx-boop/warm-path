@@ -140,6 +140,17 @@ async function run() {
     const { LINKEDIN_SESSION_PATH } = require("../config/linkedin-session");
     assert.strictEqual(startBrowser.SESSION_PATH, LINKEDIN_SESSION_PATH);
     assert.ok(path.isAbsolute(LINKEDIN_SESSION_PATH));
+    assert.strictEqual(startBrowser.resolvePlaywrightHeadless({}), false);
+    assert.strictEqual(startBrowser.resolvePlaywrightHeadless({ NODE_ENV: "development" }), false);
+    assert.strictEqual(startBrowser.resolvePlaywrightHeadless({ NODE_ENV: "production" }), true);
+    assert.strictEqual(startBrowser.resolvePlaywrightHeadless({
+        NODE_ENV: "production",
+        PLAYWRIGHT_HEADLESS: "false"
+    }), false);
+    assert.strictEqual(startBrowser.resolvePlaywrightHeadless({
+        NODE_ENV: "development",
+        PLAYWRIGHT_HEADLESS: "true"
+    }), true);
     const loginSource = fs.readFileSync(path.join(__dirname, "..", "scripts", "login.js"), "utf8");
     assert.match(loginSource, /LINKEDIN_SESSION_PATH/);
 
@@ -169,10 +180,10 @@ async function run() {
         },
         lifecycleLog: () => {}
     });
-    assert.strictEqual(launchOptions.headless, true);
+    assert.strictEqual(launchOptions.headless, false);
     assert.strictEqual(launchOptions.devtools, false);
     assert.strictEqual("slowMo" in launchOptions, false);
-    assert.deepStrictEqual(launchOptions.args, ["--disable-gpu"]);
+    assert.deepStrictEqual(launchOptions.args, ["--disable-gpu", "--window-size=1280,800"]);
     assert.strictEqual(authenticationVerified, true);
     assert.strictEqual(session.page.isClosed(), false);
     assert.strictEqual(session.browser.isConnected(), true);

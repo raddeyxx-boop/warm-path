@@ -5,6 +5,7 @@ const { readFinalExtractionResult } = require("./final-extraction-result");
 const { dispatchCompletedExtraction } = require("./n8n-dispatch-service");
 const { buildFinalExtractionResult } = require("./final-extraction-result");
 const { findValidSharedSearchCache, upsertSharedSearchCache } = require("./search-cache");
+const { resolvePlaywrightHeadless } = require("./browser");
 
 const activeExecutions = new Map();
 const activeExecutionContexts = new Map();
@@ -128,6 +129,15 @@ function childCompletion(child) {
         child.once("error", reject);
         child.once("close", code => code === 0 ? resolve() : reject(new Error(`Playwright workflow exited with code ${code}.`)));
     });
+}
+
+function shouldReuseSearchCache(environment = process.env) {
+    if (environment.PLAYWRIGHT_REUSE_SEARCH_CACHE !== undefined) {
+        return String(environment.PLAYWRIGHT_REUSE_SEARCH_CACHE)
+            .trim()
+            .toLowerCase() === "true";
+    }
+    return environment.NODE_ENV === "production";
 }
 
 function getExecutionState(workflowRunId) {
@@ -393,6 +403,9 @@ function startTargetSearchExecution(payload, accessToken, dependencies = {}) {
             const { validateTargetSearchRequest } = await import("../types/target-search-request.ts");
             const request = validateTargetSearchRequest(payload);
             executionContext.payload = request;
+            console.log("========== NEW SEARCH ==========");
+            console.log(`Workflow ID: ${workflowRunId}`);
+            console.log(`Search ID: ${request.search_request_id}`);
             logExecution("started", request);
             console.log("[LOCAL_WORKER_JOB_START]", {
                 workflow_run_id: workflowRunId,
@@ -406,10 +419,19 @@ function startTargetSearchExecution(payload, accessToken, dependencies = {}) {
             logExecution("search_cache_lookup_started", request, {
                 normalized_search_key_prefix: (request.normalized_search_key || "").slice(0, 12)
             });
-            const cacheDecision = await (dependencies.findValidSharedSearchCache || findValidSharedSearchCache)(
-                supabase,
-                request.normalized_search_key
-            );
+            const environment = dependencies.environment || process.env;
+            const reuseSearchCache = shouldReuseSearchCache(environment);
+            const cacheDecision = reuseSearchCache
+                ? await (dependencies.findValidSharedSearchCache || findValidSharedSearchCache)(
+                    supabase,
+                    request.normalized_search_key
+                )
+                : { hit: false, invalid: false, row: null, profiles: [] };
+            if (!reuseSearchCache) {
+                logExecution("search_cache_bypassed", request, {
+                    reason: "local_fresh_browser_execution"
+                });
+            }
             const cacheContainsDetailedCandidates = cacheDecision.hit &&
                 cacheDecision.profiles.every(profile =>
                     profile && typeof profile === "object" &&
@@ -508,18 +530,30 @@ function startTargetSearchExecution(payload, accessToken, dependencies = {}) {
             for (const secretName of ["N8N_WEBHOOK_SECRET", "N8N_EXTRACTION_WEBHOOK_URL", "SUPABASE_SERVICE_ROLE_KEY"]) {
                 delete childEnvironment[secretName];
             }
+            const headless = resolvePlaywrightHeadless(childEnvironment);
+            console.log("[PLAYWRIGHT_LAUNCH_CONFIGURATION]", {
+                browser_type: "chromium",
+                headless,
+                source: childEnvironment.PLAYWRIGHT_HEADLESS === undefined
+                    ? "environment_default"
+                    : "PLAYWRIGHT_HEADLESS",
+                node_env: childEnvironment.NODE_ENV || "development"
+            });
+            console.log("Launching browser...");
+            console.log(`Headless: ${headless}`);
             logExecution("playwright_launch_started", request);
             const child = spawnProcess(process.execPath, [scriptPath], {
-                cwd, windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
+                cwd, windowsHide: headless, stdio: ["ignore", "pipe", "pipe"],
                 env: {
                     ...childEnvironment, OWNER_USER_ID: request.owner_user_id, WORKFLOW_RUN_ID: workflowRunId,
                     SEARCH_REQUEST_ID: request.search_request_id, SEARCH_HASH: request.normalized_search_key,
                     WARM_PATH_RUN_DIR: runDirectory, WARM_PATH_RESULT_FILE: resultFile,
-                    WARM_PATH_TARGET_JSON: JSON.stringify(target), PLAYWRIGHT_HEADLESS: "true",
+                    WARM_PATH_TARGET_JSON: JSON.stringify(target), PLAYWRIGHT_HEADLESS: String(headless),
                     NODE_ENV: "production"
                 }
             });
             executionContext.child = child;
+            console.log(`Playwright worker PID: ${child.pid || "unknown"}`);
             const progressReader = attachProgressReader(child, supabase, request);
             activeWorkflowProcesses.set(workflowRunId, child);
             logExecution("playwright_spawned", request);
@@ -657,6 +691,7 @@ module.exports = {
     failActiveExecutions,
     markExecutionFailed,
     markSearchCacheDecision,
+    shouldReuseSearchCache,
     startTargetSearchExecution,
     terminateWorkflowProcess,
     waitForPersistedResults

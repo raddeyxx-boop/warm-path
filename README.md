@@ -1,5 +1,23 @@
 # warm-path
 
+## Local development
+
+The canonical full-stack command is:
+
+```powershell
+npm run dev:all
+```
+
+Wait for `All services are ready.`, then open
+`http://localhost:5173`. The orchestrator validates, starts, monitors, and
+recovers the Playwright API, n8n, and Vite. On Ctrl+C it stops only processes
+that it owns.
+
+For isolated debugging, `npm start`, `npm run n8n`, and `npm run frontend`
+remain available. Do not normally mix these individual commands with
+`npm run dev:all`; services already running before the orchestrator are treated
+as externally owned and are monitored but not stopped.
+
 ## Responsible Use
 
 Use this project only where your account, the target site Terms of Service, robots/extraction policies, and applicable law allow it. The main scraping scripts intentionally process small batches, add delays between page loads, retry only a limited number of times with backoff, cache profile results under data/*.json, and stop when rate-limit or blocking signals are detected.

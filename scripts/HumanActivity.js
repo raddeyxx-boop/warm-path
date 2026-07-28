@@ -566,6 +566,11 @@ async function performHumanBrowsingSession(page, helpers, config = HUMAN_BEHAVIO
     let visibleScrollCount = 0;
 
     console.log("Starting human browsing session...");
+    console.log("[HUMAN_SCROLL] Helper: performHumanBrowsingSession");
+    console.log("[HUMAN_SCROLL] Step range:",
+        `${helpers.scrollMinPx || 100}-${helpers.scrollMaxPx || 400}px`);
+    console.log("[HUMAN_SCROLL] Pause range: 800-2500ms");
+    console.log("[HUMAN_SCROLL] Reading pause: 5000-12000ms");
     if (readOnly) {
         console.log("Read-only browsing session: likes and comments disabled.");
     }

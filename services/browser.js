@@ -66,6 +66,13 @@ const DEFAULT_OPTIONS = {
     navigationTimeout: 45000
 };
 
+function resolvePlaywrightHeadless(environment = process.env) {
+    if (environment.PLAYWRIGHT_HEADLESS !== undefined) {
+        return String(environment.PLAYWRIGHT_HEADLESS).trim().toLowerCase() === "true";
+    }
+    return environment.NODE_ENV === "production";
+}
+
 class LinkedInAuthenticationError extends Error {
     constructor(code, message, details = {}) {
         super(message);
@@ -588,43 +595,58 @@ async function startBrowser(options = {}) {
         console.log("[SESSION_STATE_DIAGNOSTIC]", sessionStateDiagnostic(loadedState));
         const launchOptions = config.launchOptions || {};
         const {
-            headless: ignoredHeadless,
+            headless: configuredHeadless,
             devtools: ignoredDevtools,
             slowMo: ignoredSlowMo,
             args: configuredLaunchArgs,
             ...safeLaunchOptions
         } = launchOptions;
-        const headlessLaunchArgs = (configuredLaunchArgs || [])
+        const headless = configuredHeadless ??
+            config.headless ??
+            resolvePlaywrightHeadless(config.environment || process.env);
+        const safeConfiguredLaunchArgs = (configuredLaunchArgs || [])
             .filter(argument => !/^--(?:auto-open-devtools-for-tabs|remote-debugging|window-size|window-position|start-maximized)/i.test(argument));
+        const browserLaunchArgs = headless
+            ? safeConfiguredLaunchArgs
+            : [...safeConfiguredLaunchArgs, "--window-size=1280,800"];
+        const viewport = headless
+            ? { width: 1440, height: 900 }
+            : { width: 1200, height: 700 };
 
         const chromiumImpl = config.chromiumImpl || chromium;
         console.log("[CONTEXT_CONFIGURATION_DIAGNOSTIC]", {
             source: "index",
             browser_type: "chromium",
             channel: config.channel || null,
-            headless: true,
+            headless,
             executable_path: safeLaunchOptions.executablePath || null,
             user_agent: config.contextOptions?.userAgent || null,
-            viewport: { width: 1440, height: 900 },
+            viewport,
             locale: config.contextOptions?.locale || null,
             timezone_id: config.contextOptions?.timezoneId || null,
             proxy_configured: Boolean(safeLaunchOptions.proxy || config.contextOptions?.proxy),
             storage_state_path: sessionPath,
             persistent_context: false,
-            launch_args: headlessLaunchArgs
+            launch_args: browserLaunchArgs
         });
         browser = await chromiumImpl.launch({
             ...safeLaunchOptions,
             ...(config.channel ? { channel: config.channel } : {}),
-            headless: true,
+            headless,
             devtools: false,
-            args: headlessLaunchArgs
+            args: browserLaunchArgs
         });
+        const browserProcessPid =
+            browser?._connection?._transport?._proc?.pid ??
+            browser?._impl?._browserProcess?.pid ??
+            null;
+        console.log(`Browser PID: ${browserProcessPid || "unavailable"}`);
         const context = await browser.newContext({
             ...(config.contextOptions || {}),
             storageState: sessionPath,
-            viewport: { width: 1440, height: 900 }
+            viewport
         });
+        console.log("Context created");
 
         const diagnosticLog = config.lifecycleLog || console.log;
         let linkedInCookies;
@@ -715,6 +737,32 @@ async function startBrowser(options = {}) {
         }
 
         const page = await context.newPage();
+        console.log("Page created");
+        if (!headless && typeof context.newCDPSession === "function") {
+            const cdpSession = await context.newCDPSession(page);
+            try {
+                const { windowId } = await cdpSession.send("Browser.getWindowForTarget");
+                await cdpSession.send("Browser.setWindowBounds", {
+                    windowId,
+                    bounds: {
+                        left: 40,
+                        top: 40,
+                        width: 1280,
+                        height: 800,
+                        windowState: "normal"
+                    }
+                });
+                console.log("[VISIBLE_BROWSER_WINDOW]", {
+                    width: 1280,
+                    height: 800,
+                    left: 40,
+                    top: 40
+                });
+            } finally {
+                await cdpSession.detach().catch(() => {});
+            }
+        }
+        console.log("Navigating to LinkedIn...");
         page.setDefaultTimeout(config.navigationTimeout);
         lifecycle = createBrowserLifecycle({
             browser,
@@ -725,7 +773,10 @@ async function startBrowser(options = {}) {
         });
 
         if (config.authCheck) {
-            lifecycle.setStep("linkedin_authentication", "headless browser initialized");
+            lifecycle.setStep(
+                "linkedin_authentication",
+                `${headless ? "headless" : "headed"} browser initialized`
+            );
             await (config.authVerifier || assertLinkedInAuthenticated)(
                 page,
                 config.navigationTimeout,
@@ -758,6 +809,7 @@ async function startBrowser(options = {}) {
 
 module.exports = startBrowser;
 module.exports.SESSION_PATH = SESSION_PATH;
+module.exports.resolvePlaywrightHeadless = resolvePlaywrightHeadless;
 module.exports.assertBrowserResources = assertBrowserResources;
 module.exports.browserResourceState = browserResourceState;
 module.exports.createBrowserLifecycle = createBrowserLifecycle;

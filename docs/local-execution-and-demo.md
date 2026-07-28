@@ -19,9 +19,16 @@ From the repository root, run:
 npm run dev:all
 ```
 
-This starts the existing Playwright API, repository n8n integration server, and
-Vite dashboard. The dashboard calls `POST http://localhost:3000/api/searches/start`;
-the existing extraction webhook configuration remains server-side.
+Wait for `All services are ready.`, then open `http://localhost:5173`. This
+canonical command owns and continuously monitors the Playwright API, n8n, and
+Vite dashboard. The dashboard calls
+`POST http://localhost:3000/api/searches/start`; the existing extraction webhook
+configuration remains server-side.
+
+For isolated debugging only, use `npm start`, `npm run n8n`, or
+`npm run frontend`. Do not normally mix those commands with `dev:all`. A
+service that was already running is validated and monitored as reused, and
+Ctrl+C stops only services owned by the orchestrator.
 
 ## Read-only Vercel demo mode
 

@@ -1,0 +1,219 @@
+[
+  {
+    "name": "Gowri N S",
+    "linkedin_url": "https://www.linkedin.com/in/gowri-n-s-082a72257/",
+    "headline": "HR Executive at INDPRO.SE",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "",
+    "current_company": "Indpro AB",
+    "position": "HR Executive",
+    "followers": 1654,
+    "connections": 500,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Human Resources Executive",
+        "duration": {
+          "start": "2025-01",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "STEMplify",
+        "title": "STEM Trainer",
+        "duration": {
+          "start": "2024-02",
+          "end": "2024-10",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "Conjugate Consulting",
+        "title": "Associate Consultant",
+        "duration": {
+          "start": "2023-10",
+          "end": "2023-11",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "NATIONAL CADET CORPS - India",
+        "title": "Junior Under Officer",
+        "duration": {
+          "start": "2021-04",
+          "end": "2023-03",
+          "currently_working": false
+        }
+      },
+      {
+        "company": "BlueRose Technologies",
+        "title": "Business Development Intern",
+        "duration": {
+          "start": "2022-12",
+          "end": "2023-02",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "Bachelor of Commerce - BCom",
+        "field_of_study": "Accounting and Finance",
+        "dates": "Jan 2020 – Aug 2023",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "MES PU College of Arts, Commerce and Science",
+        "degree": "PUC",
+        "field_of_study": "Commerce",
+        "dates": "Jul 2018 – Nov 2020",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Student Engagement",
+      "Spoken English"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Ayush Pal",
+    "linkedin_url": "https://www.linkedin.com/in/ayush-pal-2a29a9255/",
+    "headline": "Junior Software Engineer at @INDPRO AB",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "I am passionate about technology, problem-solving, and innovation. With a strong foundation in frontend- development, I enjoy building efficient and scalable solutions. My interests lie in web development, frontend technologies, and real-time systems. Constantly learning and adapting, I strive to enhance my skills in React.js, Node.js, and database management while staying updated with industry trends. I believe in continuous growth, collaboration, and leveraging technology to drive impact. Let’s connect and explore opportunities to learn and grow together! 🚀Top skillsFront-End Development • Back-End Web Development • React.js • Data structure and algorithm • Project Planning",
+    "current_company": "Indpro AB",
+    "position": "Junior Software Engineer",
+    "followers": 495,
+    "connections": 463,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-09",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Nanny Tech",
+        "title": "Full-stack Developer",
+        "duration": {
+          "start": "2025-03",
+          "end": "2025-05",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Ramaiah College Of Arts, Science and Commerce",
+        "degree": "BCA",
+        "field_of_study": "Computer science",
+        "dates": "Sep 2022 – Aug 2025",
+        "activities": "",
+        "honors": ""
+      },
+      {
+        "school": "Assam Rifles Public School, Jorhat",
+        "degree": "Higher secondary",
+        "field_of_study": "",
+        "dates": "",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Event Tracker"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Uttam kumar Maharana",
+    "linkedin_url": "https://www.linkedin.com/in/uttamkumar-dev/",
+    "headline": "Full Stack Developer | MEAN MERN Specialist | Experienced in MongoDB, PostgreSQL, MySQL, Redux",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "As a Full Stack Developer with experience as a Programmer Analyst, I bring a unique perspective to building robust and scalable web applications. I have hands-on experience with the MERN stack (MongoDB, Express.js, React.js, Node.js) and other technologies like PostgreSQL, MySQL, Prisma, and Redux for state management. My work spans from developing online surveys with Sawtooth (SSI Web) to building personal projects, including interactive quiz platforms, social media platforms and inventory management tools. Top skillsFull Stack Development (MERN) • Databases: MongoDB, PostgreSQL, MySQL • ORMs: Mongoose, Prisma • State Management: Redux • API Development & Integration",
+    "current_company": "Indpro AB",
+    "position": "Full Stack Developer",
+    "followers": 209,
+    "connections": 207,
+    "experience": [
+      {
+        "company": "Indpro AB",
+        "title": "Junior Software Engineer",
+        "duration": {
+          "start": "2025-04",
+          "end": null,
+          "currently_working": true
+        }
+      },
+      {
+        "company": "Techsaint Technology Solutions Pvt.Ltd.",
+        "title": "Full Stack Developer",
+        "duration": {
+          "start": "2024-11",
+          "end": "2025-03",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Institute of Management & Information Technology, Cuttack",
+        "degree": "Master's degree",
+        "field_of_study": "Computer Engineering",
+        "dates": "2020 – 2022",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Angular",
+      "Ionic Framework"
+    ],
+    "technologies": []
+  },
+  {
+    "name": "Jnanesha V G",
+    "linkedin_url": "https://www.linkedin.com/in/jnanesha-v-g/",
+    "headline": "Accounts executive at Indpro",
+    "location": "Bengaluru, Karnataka, India",
+    "about": "Accounting professional with 10 years of experience in finance, taxation, payroll processing, and statutory compliance. Experienced in managing end-to-end accounting operations, GST compliance, Professional Tax (PT), TDS filing, payroll administration, and financial reporting. Top skillsPayroll • Auditing",
+    "current_company": "Indpro",
+    "position": "Accounts executive",
+    "followers": 87,
+    "connections": 83,
+    "experience": [
+      {
+        "company": "Charted Accountant Consulting Firm",
+        "title": "Accountant",
+        "duration": {
+          "start": "2016-08",
+          "end": "2019-02",
+          "currently_working": false
+        }
+      }
+    ],
+    "education": [
+      {
+        "school": "Bangalore University",
+        "degree": "Bachelor of Commerce - BCom",
+        "field_of_study": "Accounting and Finance",
+        "dates": "2013 – 2016",
+        "activities": "",
+        "honors": ""
+      }
+    ],
+    "skills": [
+      "Personal Income Tax Returns",
+      "Tds"
+    ],
+    "technologies": []
+  }
+]

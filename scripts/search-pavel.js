@@ -926,7 +926,10 @@ async function prepareSearchBox(searchBox) {
 async function typeTargetNameIntoSearch(page, searchBox, targetName, humanTyper = typeLikeHuman) {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
         await prepareSearchBox(searchBox);
+        console.log("[LINKEDIN_SEARCH] Query type: target");
+        console.log("[LINKEDIN_SEARCH] Human typing started");
         await humanTyper(page, targetName);
+        console.log("[LINKEDIN_SEARCH] Human typing completed");
         const actualValue = await searchBox.inputValue();
 
         console.log("[TARGET_SEARCH_INPUT]", {
@@ -944,6 +947,9 @@ async function typeTargetNameIntoSearch(page, searchBox, targetName, humanTyper 
 
 async function typeLikeHuman(page, text) {
 
+    console.log("[HUMAN_TYPING] Helper: typeLikeHuman");
+    console.log("[HUMAN_TYPING] Character delay range: 70-149ms | 120-279ms");
+    console.log("[HUMAN_TYPING] Query length:", cleanText(text).length);
     await page.waitForTimeout(900 + Math.floor(Math.random() * 900));
 
     const value = cleanText(text);
@@ -1569,13 +1575,16 @@ async function profileAnchorForSuggestion(suggestion, normalizedTargetHref) {
 async function clickMatchedProfileAnchor(page, match, normalizedTargetHref) {
     console.log("Selected suggestion:", { text: match.text, href: match.href });
     await match.anchor.scrollIntoViewIfNeeded();
-    await match.anchor.click({ timeout: 10000 });
+    await moveMouseToLocator(page, match.anchor);
+    await page.waitForTimeout(250 + Math.floor(Math.random() * 450));
+    await clickLikeHuman(match.anchor, page);
 
     if (normalizedTargetHref) {
         await page.waitForURL(
             url => normalizeLinkedInProfilePath(url.toString()) === normalizedTargetHref,
             { timeout: 30000 }
         );
+        await waitForProfileToLoad(page, normalizeProfileUrl(match.href));
     } else {
         await waitForProfileToLoad(page);
     }
@@ -1645,7 +1654,13 @@ async function openTargetFromPeopleResults(page, target, searchBox) {
     console.log("No exact dropdown match.");
     console.log("Checking people search results.");
     await searchBox.press("Enter");
+    console.log("[LINKEDIN_SEARCH] Search submitted");
     await page.waitForURL(url => /\/search\/results\//i.test(url.pathname), { timeout: 30000 });
+    console.log("[LINKEDIN_SEARCH] Navigation/results detected");
+    console.log("[LINKEDIN_SEARCH] Search input focused:",
+        typeof searchBox.evaluate === "function"
+            ? await searchBox.evaluate(element => element === document.activeElement).catch(() => false)
+            : false);
 
     const anchors = page.locator('main a[href*="/in/"]');
     await anchors.first().waitFor({ state: "visible", timeout: 15000 });
@@ -1678,6 +1693,7 @@ async function openTargetProfileBySearch(page, target) {
 
     const searchBox = await getSearchBox(page);
 
+    console.log("[LINKEDIN_SEARCH] Search input located");
     console.log("Search box found.");
     console.log("Searching target:", targetName);
     emitProgress("searching_target", `Searching for ${targetName}...`);
@@ -1714,6 +1730,13 @@ if (
         throw new Error(hasTargetUrl
             ? "Target profile URL not found in LinkedIn search results."
             : "Target not found in LinkedIn search suggestions.");
+    }
+    if (dropdownMatch) {
+        console.log("[LINKEDIN_SEARCH] Search submitted");
+        console.log("[LINKEDIN_SEARCH] Navigation/results detected");
+        console.log("[LINKEDIN_SEARCH] Search input focused:", await page.evaluate(
+            () => document.activeElement?.matches?.('input[placeholder*="Search" i]') || false
+        ).catch(() => false));
     }
 
     console.log("[TARGET] Target profile loaded");

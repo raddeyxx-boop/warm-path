@@ -20,9 +20,15 @@ function suggestion(page, { text, href }) {
         innerText: async () => text,
         getAttribute: async name => name === "href" ? href : null,
         locator: () => locatorList([]),
+        boundingBox: async () => ({ x: 100, y: 100, width: 220, height: 48 }),
+        page: () => page,
+        waitFor: async () => {},
+        hover: async () => {},
+        evaluate: async () => false,
         scrollIntoViewIfNeeded: async () => { page.scrolls += 1; },
         click: async options => {
-            assert.deepStrictEqual(options, { timeout: 10000 });
+            assert.strictEqual(options.timeout, 7000);
+            assert.ok(options.delay >= 70 && options.delay <= 179);
             page.clicks += 1;
             page.currentUrl = new URL(href, "https://www.linkedin.com").href;
         }
@@ -34,6 +40,9 @@ function mockPage() {
         clicks: 0,
         scrolls: 0,
         currentUrl: "https://www.linkedin.com/feed/",
+        mouse: { move: async () => {} },
+        waitForTimeout: async () => {},
+        viewportSize: () => ({ width: 1200, height: 700 }),
         url() { return this.currentUrl; },
         waitForURL: async function (predicate) {
             assert.strictEqual(predicate(new URL(this.currentUrl)), true);
@@ -69,7 +78,7 @@ async function run() {
         }, locatorList([nonMatch, exact, suggestion(page, { text: "Unread", href: "/in/unread" })]));
         assert.strictEqual(matched, true);
         assert.strictEqual(page.clicks, 1);
-        assert.strictEqual(page.scrolls, 1);
+        assert.strictEqual(page.scrolls, 2);
     }
 
     const wrongUrlPage = mockPage();
@@ -94,6 +103,9 @@ async function run() {
         assert.strictEqual(predicate(new URL(resultsPage.currentUrl)), true);
     };
     resultsPage.locator = selector => {
+        if (selector === "main") {
+            return { first: () => ({ waitFor: async () => {} }) };
+        }
         assert.strictEqual(selector, 'main a[href*="/in/"]');
         const list = locatorList([resultAnchor]);
         list.first = () => ({ waitFor: async () => {} });

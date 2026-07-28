@@ -549,6 +549,9 @@ async function scrollProfile(page, distance) {
 async function typeLikeHuman(page, text) {
     const value = cleanText(text);
 
+    console.log("[HUMAN_TYPING] Helper: typeLikeHuman");
+    console.log("[HUMAN_TYPING] Character delay range: 70-140ms | 120-280ms");
+    console.log("[HUMAN_TYPING] Query length:", value.length);
     for (let index = 0; index < value.length; index++) {
         const char = value[index];
         const keyDelay = Math.random() < 0.18
@@ -675,6 +678,8 @@ async function runProfileSearch(page, mutualProfile, strategy = null) {
     }
 
     await searchBox.waitFor({ state: "visible", timeout: TIMEOUTS.searchBoxMs });
+    console.log("[LINKEDIN_SEARCH] Search input located");
+    console.log("[LINKEDIN_SEARCH] Query type: mutual");
     console.log("Global search box visible.");
 
     await prepareForMutualSearch(page);
@@ -693,7 +698,9 @@ async function runProfileSearch(page, mutualProfile, strategy = null) {
         throw new Error(`Global search box did not clear. Current value: "${valueAfterClear}".`);
     }
     console.log("Global search box cleared.");
+    console.log("[LINKEDIN_SEARCH] Human typing started");
     await typeLikeHuman(page, searchStrategy.query);
+    console.log("[LINKEDIN_SEARCH] Human typing completed");
     const typedValue = cleanText(await searchBox.inputValue().catch(() => ""));
     if (typedValue.toLowerCase() !== cleanText(searchStrategy.query).toLowerCase()) {
         throw new Error(`Search input mismatch. Expected "${searchStrategy.query}" but found "${typedValue}".`);
@@ -746,6 +753,7 @@ async function openVerifiedProfile(page, suggestion, expectedUrl) {
 
     console.log("Opening profile:", expectedUrl);
     await naturalClick(page, suggestion, "Suggestion");
+    console.log("[LINKEDIN_SEARCH] Search submitted");
 
     await page.waitForURL(url => {
         return normalizeProfileUrl(url.href) === expectedUrl ||
@@ -781,6 +789,10 @@ async function openVerifiedProfile(page, suggestion, expectedUrl) {
         state: "visible",
         timeout: TIMEOUTS.contentMs
     });
+    console.log("[LINKEDIN_SEARCH] Navigation/results detected");
+    console.log("[LINKEDIN_SEARCH] Search input focused:", await page.evaluate(
+        () => document.activeElement?.matches?.('input[placeholder*="Search" i]') || false
+    ).catch(() => false));
 
     await pause(page, 3000, 6000);
 }
