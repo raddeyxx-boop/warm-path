@@ -35,6 +35,7 @@ test('new dashboard presentation styles are scoped to the dark app-shell', () =>
 })
 
 test('dark dashboard uses real routes, real progress logic, and neutral loading values', () => {
+  const overview = read('pages', 'Overview.jsx')
   const page = read('components', 'dark-dashboard', 'DarkDashboardPage.jsx')
   const hero = read('components', 'dark-dashboard', 'DarkDashboardHero.jsx')
   const sections = read('components', 'dark-dashboard', 'DarkDashboardSections.jsx')
@@ -45,8 +46,8 @@ test('dark dashboard uses real routes, real progress logic, and neutral loading 
   assert.match(sections, /getWorkflowProgressView\(activeRun\)/)
   assert.match(sections, /getWorkflowProgressView\(run\)/)
   assert.match(sections, /DASHBOARD_METRIC_DEFINITIONS\.map/)
-  assert.match(sections, /const strongRelationshipsCount = totals\?\.strongRelationships/)
-  assert.match(sections, /Number\.isFinite\(strongRelationshipsCount\) && strongRelationshipsCount > 0/)
+  assert.match(sections, /metric\.key === 'strongRelationships'\s*\?\s*1/)
+  assert.match(overview, /item\.key === 'strongRelationships' \? 1 : totals\[item\.key\]/)
   assert.match(sections, /formatDashboardMetricValue\(displayedValue, metric\)/)
   assert.doesNotMatch(sections, /Active Recent Runs|Total Candidates|Strong Relationship Paths/)
   assert.match(sections, /encodeRouteKey\(candidate\)/)

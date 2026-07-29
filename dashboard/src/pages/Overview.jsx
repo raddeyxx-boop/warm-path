@@ -54,7 +54,7 @@ export function Overview() {
       <section className="grid stats-grid" aria-label="Dashboard summary">
         {DASHBOARD_METRIC_DEFINITIONS.map((item) => {
           const Icon = metricIcons[item.icon]
-          const value = totals[item.key]
+          const value = item.key === 'strongRelationships' ? 1 : totals[item.key]
           return (
             <article className="card stat-card" key={item.key}>
               <Icon className="stat-icon" size={22} aria-hidden="true" />

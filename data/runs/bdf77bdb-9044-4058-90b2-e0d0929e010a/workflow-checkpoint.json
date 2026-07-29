@@ -1,0 +1,11 @@
+{
+  "stage": "STAGE_2_READY",
+  "mutual_count": 30,
+  "mutuals_parent_page": {
+    "url": "https://www.linkedin.com/search/results/people/?origin=FACETED_SEARCH&network=%5B%22F%22%2C%22S%22%5D&company=%22Indpro%20AB%22&currentCompany=%5B%22663646%22%5D&connectionOf=%22ACoAAD-3mbkBD2cbp0GW3p2b7HahD5h-oqfaurU%22&page=3&spellCorrectionEnabled=true&prioritizeMessage=false",
+    "scrollY": 0
+  },
+  "completed_at": "2026-07-29T09:35:56.106Z",
+  "resume_after": "2026-07-29T09:36:26.106Z",
+  "resumed_at": "2026-07-29T09:36:26.672Z"
+}

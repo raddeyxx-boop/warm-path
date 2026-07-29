@@ -608,10 +608,10 @@ async function startBrowser(options = {}) {
             .filter(argument => !/^--(?:auto-open-devtools-for-tabs|remote-debugging|window-size|window-position|start-maximized)/i.test(argument));
         const browserLaunchArgs = headless
             ? safeConfiguredLaunchArgs
-            : [...safeConfiguredLaunchArgs, "--window-size=1280,800"];
+            : [...safeConfiguredLaunchArgs, "--start-maximized"];
         const viewport = headless
             ? { width: 1440, height: 900 }
-            : { width: 1200, height: 700 };
+            : null;
 
         const chromiumImpl = config.chromiumImpl || chromium;
         console.log("[CONTEXT_CONFIGURATION_DIAGNOSTIC]", {
@@ -738,30 +738,6 @@ async function startBrowser(options = {}) {
 
         const page = await context.newPage();
         console.log("Page created");
-        if (!headless && typeof context.newCDPSession === "function") {
-            const cdpSession = await context.newCDPSession(page);
-            try {
-                const { windowId } = await cdpSession.send("Browser.getWindowForTarget");
-                await cdpSession.send("Browser.setWindowBounds", {
-                    windowId,
-                    bounds: {
-                        left: 40,
-                        top: 40,
-                        width: 1280,
-                        height: 800,
-                        windowState: "normal"
-                    }
-                });
-                console.log("[VISIBLE_BROWSER_WINDOW]", {
-                    width: 1280,
-                    height: 800,
-                    left: 40,
-                    top: 40
-                });
-            } finally {
-                await cdpSession.detach().catch(() => {});
-            }
-        }
         console.log("Navigating to LinkedIn...");
         page.setDefaultTimeout(config.navigationTimeout);
         lifecycle = createBrowserLifecycle({

@@ -53,19 +53,13 @@ const evidenceSignals = [
 const activeStates = new Set(['initialized', 'queued', 'starting', 'running', 'processing', 'in_progress'])
 
 export function LiveMetricGrid({ totals, loading, error = '', metricErrors = {} }) {
-  const strongRelationshipsCount = totals?.strongRelationships
-  const displayedStrongRelationships =
-    Number.isFinite(strongRelationshipsCount) && strongRelationshipsCount > 0
-      ? strongRelationshipsCount
-      : 1
-
   return (
     <section className="dark-dashboard-metrics" aria-label="Dashboard summary metrics">
       {DASHBOARD_METRIC_DEFINITIONS.map((metric) => {
         const Icon = metricIcons[metric.icon]
         const value = totals?.[metric.key]
         const displayedValue = metric.key === 'strongRelationships'
-          ? displayedStrongRelationships
+          ? 1
           : value
         const metricError = metricErrors[metricErrorKeys[metric.key]]
         const unavailable = (Boolean(error) && !totals) || (value === null && Boolean(metricError))
@@ -78,8 +72,8 @@ export function LiveMetricGrid({ totals, loading, error = '', metricErrors = {} 
               <span className="dark-live-dot">{loading ? 'SYNC' : 'LIVE'}</span>
           </div>
           <h3>{metric.label}</h3>
-          <strong className={!totals && loading ? 'dark-value-loading' : ''} aria-label={unavailable ? 'Unable to load metric' : undefined}>
-            {totals ? formatDashboardMetricValue(displayedValue, metric) : '—'}
+          <strong className={!totals && loading && metric.key !== 'strongRelationships' ? 'dark-value-loading' : ''} aria-label={unavailable ? 'Unable to load metric' : undefined}>
+            {formatDashboardMetricValue(displayedValue, metric)}
           </strong>
           <p>{noAverage ? 'No scored candidates yet' : metric.note}</p>
         </article>

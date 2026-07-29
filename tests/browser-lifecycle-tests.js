@@ -183,7 +183,7 @@ async function run() {
     assert.strictEqual(launchOptions.headless, false);
     assert.strictEqual(launchOptions.devtools, false);
     assert.strictEqual("slowMo" in launchOptions, false);
-    assert.deepStrictEqual(launchOptions.args, ["--disable-gpu", "--window-size=1280,800"]);
+    assert.deepStrictEqual(launchOptions.args, ["--disable-gpu", "--start-maximized"]);
     assert.strictEqual(authenticationVerified, true);
     assert.strictEqual(session.page.isClosed(), false);
     assert.strictEqual(session.browser.isConnected(), true);

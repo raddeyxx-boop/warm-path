@@ -38,6 +38,12 @@ const {
     fullNameSearchStrategy
 } = require("../utils/SearchStrategy");
 const {
+    assertLinkedInSearchFocusReleased,
+    getLinkedInProfileReadingTarget,
+    logLinkedInSearchFocus,
+    releaseLinkedInSearchFocus
+} = require("../utils/LinkedInSearchFocus");
+const {
     scoreProfileSuggestion,
     scoreToPercent
 } = require("../utils/ProfileVerification");
@@ -688,6 +694,7 @@ async function runProfileSearch(page, mutualProfile, strategy = null) {
     console.log("Typed:");
     console.log(`"${searchStrategy.query}"`);
     await naturalClick(page, searchBox, "Search box");
+    await logLinkedInSearchFocus(page, "before_typing");
     await pause(page, 500, 1500);
     await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
     await pause(page, 180, 420);
@@ -701,6 +708,7 @@ async function runProfileSearch(page, mutualProfile, strategy = null) {
     console.log("[LINKEDIN_SEARCH] Human typing started");
     await typeLikeHuman(page, searchStrategy.query);
     console.log("[LINKEDIN_SEARCH] Human typing completed");
+    await logLinkedInSearchFocus(page, "after_typing");
     const typedValue = cleanText(await searchBox.inputValue().catch(() => ""));
     if (typedValue.toLowerCase() !== cleanText(searchStrategy.query).toLowerCase()) {
         throw new Error(`Search input mismatch. Expected "${searchStrategy.query}" but found "${typedValue}".`);
@@ -790,9 +798,10 @@ async function openVerifiedProfile(page, suggestion, expectedUrl) {
         timeout: TIMEOUTS.contentMs
     });
     console.log("[LINKEDIN_SEARCH] Navigation/results detected");
-    console.log("[LINKEDIN_SEARCH] Search input focused:", await page.evaluate(
-        () => document.activeElement?.matches?.('input[placeholder*="Search" i]') || false
-    ).catch(() => false));
+    await releaseLinkedInSearchFocus(page, async () => {
+        const profileHeading = await getLinkedInProfileReadingTarget(page, TIMEOUTS.contentMs);
+        await naturalClick(page, profileHeading, "Profile heading");
+    });
 
     await pause(page, 3000, 6000);
 }
@@ -1874,6 +1883,9 @@ function validateProfileExtraction(profile, header) {
 
 async function scrapeProfile(page, options = {}) {
     assertPageUsable(page, "profile extraction");
+    if (options.targetProfile || options.mutualProfile) {
+        await assertLinkedInSearchFocusReleased(page);
+    }
     page.setDefaultTimeout(TIMEOUTS.profileMs);
     page.setDefaultNavigationTimeout(TIMEOUTS.pageLoadMs);
 

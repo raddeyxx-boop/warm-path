@@ -4,6 +4,11 @@ const {
 const { saveTargetProfile } = require("../utils/saveTargetProfile");
 const { mergeTargetProfile } = require("../utils/mergeTargetProfile");
 const { scrapeProfile } = require("./scrape-profile-details");
+const {
+    getLinkedInProfileReadingTarget,
+    logLinkedInSearchFocus,
+    releaseLinkedInSearchFocus
+} = require("../utils/LinkedInSearchFocus");
 
 const {
     HUMAN_BEHAVIOR_CONFIG
@@ -926,10 +931,12 @@ async function prepareSearchBox(searchBox) {
 async function typeTargetNameIntoSearch(page, searchBox, targetName, humanTyper = typeLikeHuman) {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
         await prepareSearchBox(searchBox);
+        await logLinkedInSearchFocus(page, "before_typing");
         console.log("[LINKEDIN_SEARCH] Query type: target");
         console.log("[LINKEDIN_SEARCH] Human typing started");
         await humanTyper(page, targetName);
         console.log("[LINKEDIN_SEARCH] Human typing completed");
+        await logLinkedInSearchFocus(page, "after_typing");
         const actualValue = await searchBox.inputValue();
 
         console.log("[TARGET_SEARCH_INPUT]", {
@@ -1734,11 +1741,13 @@ if (
     if (dropdownMatch) {
         console.log("[LINKEDIN_SEARCH] Search submitted");
         console.log("[LINKEDIN_SEARCH] Navigation/results detected");
-        console.log("[LINKEDIN_SEARCH] Search input focused:", await page.evaluate(
-            () => document.activeElement?.matches?.('input[placeholder*="Search" i]') || false
-        ).catch(() => false));
     }
 
+    await releaseLinkedInSearchFocus(page, async () => {
+        const profileHeading = await getLinkedInProfileReadingTarget(page, 15000);
+        await moveMouseToLocator(page, profileHeading);
+        await clickLikeHuman(profileHeading, page);
+    });
     console.log("[TARGET] Target profile loaded");
     emitProgress("target_profile_opened");
 }

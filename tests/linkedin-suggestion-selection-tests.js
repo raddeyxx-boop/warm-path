@@ -124,7 +124,13 @@ async function run() {
     assert.strictEqual(resultsPage.clicks, 1);
     assert.strictEqual(enterPresses, 1);
 
-    const typingPage = { waitForTimeout: async () => {} };
+    const typingPage = {
+        waitForTimeout: async () => {},
+        evaluate: async () => ({
+            activeElement: "input/role=combobox",
+            searchInputActive: true
+        })
+    };
     const pressed = [];
     let typedValue = "";
     const typingBox = {
