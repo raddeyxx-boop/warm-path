@@ -9,7 +9,11 @@ const {
 function focusPage(states, events) {
     let index = 0;
     return {
-        evaluate: async () => {
+        evaluate: async action => {
+            if (/\.blur\(\)/.test(action.toString())) {
+                events.push("blur-search-input");
+                return;
+            }
             events.push(`inspect:${index}`);
             return states[Math.min(index++, states.length - 1)];
         }
@@ -26,41 +30,43 @@ function functionBody(source, name, nextName) {
 async function run() {
     const active = {
         activeElement: "input/role=combobox/aria-label=Search",
-        searchInputActive: true
+        searchInputActive: true,
+        modalOpen: false
     };
     const released = {
         activeElement: "h1",
-        searchInputActive: false
+        searchInputActive: false,
+        modalOpen: false
+    };
+    const modalOpen = {
+        activeElement: "body",
+        searchInputActive: false,
+        modalOpen: true
     };
 
     const events = [];
-    await releaseLinkedInSearchFocus(
-        focusPage([active, released], events),
-        async () => events.push("natural-profile-interaction")
-    );
+    await releaseLinkedInSearchFocus(focusPage([active, released], events));
     assert.deepStrictEqual(events, [
         "inspect:0",
-        "natural-profile-interaction",
+        "blur-search-input",
         "inspect:1"
     ]);
 
     const alreadyReleasedEvents = [];
-    await releaseLinkedInSearchFocus(
-        focusPage([released, released], alreadyReleasedEvents),
-        async () => alreadyReleasedEvents.push("unexpected-interaction")
-    );
+    await releaseLinkedInSearchFocus(focusPage([released, released], alreadyReleasedEvents));
     assert.deepStrictEqual(alreadyReleasedEvents, ["inspect:0", "inspect:1"]);
 
     await assert.rejects(
-        () => releaseLinkedInSearchFocus(
-            focusPage([active, active], []),
-            async () => {}
-        ),
+        () => releaseLinkedInSearchFocus(focusPage([active, active], [])),
         /SEARCH_FOCUS_NOT_RELEASED/
     );
     await assert.rejects(
         () => assertLinkedInSearchFocusReleased(focusPage([active], [])),
         /SEARCH_FOCUS_NOT_RELEASED/
+    );
+    await assert.rejects(
+        () => assertLinkedInSearchFocusReleased(focusPage([modalOpen], [])),
+        /PROFILE_MODAL_OPEN/
     );
 
     const targetSource = fs.readFileSync(
@@ -89,7 +95,7 @@ async function run() {
         targetOpening.indexOf("releaseLinkedInSearchFocus"));
     assert.ok(targetOpening.indexOf("releaseLinkedInSearchFocus") <
         targetOpening.indexOf("[TARGET] Target profile loaded"));
-    assert.match(targetOpening, /getLinkedInProfileReadingTarget/);
+    assert.doesNotMatch(targetOpening, /profileHeading|naturalProfileInteraction/);
 
     const mutualSearch = functionBody(
         mutualSource,
@@ -108,7 +114,7 @@ async function run() {
         mutualOpening.indexOf("[LINKEDIN_SEARCH] Navigation/results detected"));
     assert.ok(mutualOpening.indexOf("[LINKEDIN_SEARCH] Navigation/results detected") <
         mutualOpening.indexOf("releaseLinkedInSearchFocus"));
-    assert.match(mutualOpening, /getLinkedInProfileReadingTarget/);
+    assert.doesNotMatch(mutualOpening, /profileHeading|naturalProfileInteraction/);
 
     const scraper = functionBody(
         mutualSource,
@@ -122,8 +128,10 @@ async function run() {
     assert.match(mutualSource, /HUMAN_BEHAVIOR_CONFIG\.minSearchDelayMs/);
     assert.doesNotMatch(
         `${targetOpening}\n${mutualOpening}`,
-        /\.blur\(|keyboard\.press\(["'](?:Escape|Tab)["']\)|page\.goto\(|page\.reload\(|mouse\.click\(/
+        /keyboard\.press\(["'](?:Escape|Tab)["']\)|page\.goto\(|page\.reload\(|mouse\.click\(/
     );
+    assert.match(targetOpening, /await releaseLinkedInSearchFocus\(page\);/);
+    assert.match(mutualOpening, /await releaseLinkedInSearchFocus\(page\);/);
 
     console.log("LinkedIn search focus lifecycle tests passed.");
 }

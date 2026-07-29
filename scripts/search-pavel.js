@@ -5,7 +5,6 @@ const { saveTargetProfile } = require("../utils/saveTargetProfile");
 const { mergeTargetProfile } = require("../utils/mergeTargetProfile");
 const { scrapeProfile } = require("./scrape-profile-details");
 const {
-    getLinkedInProfileReadingTarget,
     logLinkedInSearchFocus,
     releaseLinkedInSearchFocus
 } = require("../utils/LinkedInSearchFocus");
@@ -1743,11 +1742,7 @@ if (
         console.log("[LINKEDIN_SEARCH] Navigation/results detected");
     }
 
-    await releaseLinkedInSearchFocus(page, async () => {
-        const profileHeading = await getLinkedInProfileReadingTarget(page, 15000);
-        await moveMouseToLocator(page, profileHeading);
-        await clickLikeHuman(profileHeading, page);
-    });
+    await releaseLinkedInSearchFocus(page);
     console.log("[TARGET] Target profile loaded");
     emitProgress("target_profile_opened");
 }

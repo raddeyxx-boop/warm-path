@@ -39,7 +39,6 @@ const {
 } = require("../utils/SearchStrategy");
 const {
     assertLinkedInSearchFocusReleased,
-    getLinkedInProfileReadingTarget,
     logLinkedInSearchFocus,
     releaseLinkedInSearchFocus
 } = require("../utils/LinkedInSearchFocus");
@@ -798,10 +797,7 @@ async function openVerifiedProfile(page, suggestion, expectedUrl) {
         timeout: TIMEOUTS.contentMs
     });
     console.log("[LINKEDIN_SEARCH] Navigation/results detected");
-    await releaseLinkedInSearchFocus(page, async () => {
-        const profileHeading = await getLinkedInProfileReadingTarget(page, TIMEOUTS.contentMs);
-        await naturalClick(page, profileHeading, "Profile heading");
-    });
+    await releaseLinkedInSearchFocus(page);
 
     await pause(page, 3000, 6000);
 }
